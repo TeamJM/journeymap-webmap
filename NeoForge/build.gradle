@@ -37,12 +37,12 @@ dependencies {
     implementation group: "info.journeymap", name: "journeymap-api-neoforge", version: "${project.journeymap_api_version}-${project.minecraft_version}-SNAPSHOT", changing: true
 
     implementation("io.javalin:javalin:${project.javalin_version}")
+    shade group: 'io.javalin', name: 'javalin', version: project.javalin_version
     additionalRuntimeClasspath("io.javalin:javalin:${project.javalin_version}")
 
     shade group: 'info.journeymap', name: 'webmap-client', version: project.journeymap_webmap_version, changing: true
 
     //external libs shade
-    shade group: 'io.javalin', name: 'javalin', version: project.javalin_version
     compileOnly project(":Common")
 }
 

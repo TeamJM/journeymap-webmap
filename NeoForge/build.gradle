@@ -35,7 +35,9 @@ configurations.all {
 dependencies {
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
     implementation group: "info.journeymap", name: "journeymap-api-neoforge", version: "${project.journeymap_api_version}-${project.minecraft_version}-SNAPSHOT", changing: true
-    implementation group: 'io.javalin', name: 'javalin', version: project.javalin_version
+
+    implementation("io.javalin:javalin:${project.javalin_version}")
+    additionalRuntimeClasspath("io.javalin:javalin:${project.javalin_version}")
 
     shade group: 'info.journeymap', name: 'webmap-client', version: project.journeymap_webmap_version, changing: true
 

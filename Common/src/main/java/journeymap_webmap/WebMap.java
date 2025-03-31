@@ -31,11 +31,25 @@ public class WebMap
     private Javalin app = null;
     private static WebMap INSTANCE;
 
+    public WebMap(Javalin app)
+    {
+        this.app = app;
+    }
+
     public static WebMap getInstance()
     {
         if (INSTANCE == null)
         {
-            INSTANCE = new WebMap();
+            INSTANCE = new WebMap(null);
+        }
+        return INSTANCE;
+    }
+
+    public static WebMap getInstance(Javalin app)
+    {
+        if (INSTANCE == null)
+        {
+            INSTANCE = new WebMap(app);
         }
         return INSTANCE;
     }
@@ -44,10 +58,18 @@ public class WebMap
     {
         if (!started)
         {
-            findPort(true);
-            initialise();
-            started = true;
-            logger.info("WebMap is now listening on port {}", port);
+            try
+            {
+                logger.info("starting webmap server");
+                findPort(true);
+                initialise();
+                started = true;
+                logger.info("WebMap is now listening on port {}", port);
+            }
+            catch (Exception e)
+            {
+                logger.error("Failed to start webmap server: ", e);
+            }
         }
     }
 
@@ -55,66 +77,70 @@ public class WebMap
     {
         try
         {
-            app = Javalin.create(config -> {
-                        String assetsRootProperty = System.getProperty("journeymap.webmap.assets_root", null);
-                        File testFile = new File("../src/main/resources" + FileHandler.ASSETS_WEBMAP);
+            if (app == null)
+            {
+                app = Javalin.create(config -> {
+                            String assetsRootProperty = System.getProperty("journeymap.webmap.assets_root", null);
+                            File testFile = new File("../src/main/resources" + FileHandler.ASSETS_WEBMAP);
 
-                        if (assetsRootProperty != null)
-                        {
-                            logger.info("Detected 'journeymap.webmap.assets_root' property, serving static files from: " + assetsRootProperty);
-                            config.staticFiles.add(assetsRootProperty, Location.EXTERNAL);
-                        }
-                        else if (testFile.exists())
-                        {
-                            try
+                            if (assetsRootProperty != null)
                             {
-                                String assets = testFile.getCanonicalPath();
-                                logger.info("Development environment detected, serving static files from the filesystem.: " + assets);
-                                config.staticFiles.add(testFile.getCanonicalPath(), Location.EXTERNAL);
+                                logger.info("Detected 'journeymap.webmap.assets_root' property, serving static files from: " + assetsRootProperty);
+                                config.staticFiles.add(assetsRootProperty, Location.EXTERNAL);
                             }
-                            catch (IOException e)
+                            else if (testFile.exists())
                             {
-                                logger.error("WebMap error finding local assets path", e);
-                            }
-                        }
-                        else
-                        {
-                            File dir = new File(FileHandler.getMinecraftDirectory(), Constants.WEB_DIR);
-                            if (dir.exists())
-                            {
-                                dir.delete();
-                            }
-                            if (!dir.exists())
-                            {
-                                logger.info("Attempting to copy web content to {}", new File(Constants.JOURNEYMAP_DIR, "web"));
-                                boolean created = FileHandler.copyResources(dir, ResourceLocation.fromNamespaceAndPath(MOD_ID, "web"), "", false);
-                                logger.info("Web content copied successfully: {}", created);
-                            }
-
-                            if (dir.exists())
-                            {
-                                logger.info("Loading web content from local: {}", dir.getPath());
-                                config.staticFiles.add(dir.getPath(), Location.EXTERNAL);
+                                try
+                                {
+                                    String assets = testFile.getCanonicalPath();
+                                    logger.info("Development environment detected, serving static files from the filesystem.: " + assets);
+                                    config.staticFiles.add(testFile.getCanonicalPath(), Location.EXTERNAL);
+                                }
+                                catch (IOException e)
+                                {
+                                    logger.error("WebMap error finding local assets path", e);
+                                }
                             }
                             else
                             {
-                                logger.info("Loading web content from jar: {}", FileHandler.ASSETS_WEBMAP);
-                                config.staticFiles.add(FileHandler.ASSETS_WEBMAP, Location.CLASSPATH);
+                                File dir = new File(FileHandler.getMinecraftDirectory(), Constants.WEB_DIR);
+                                if (dir.exists())
+                                {
+                                    dir.delete();
+                                }
+                                if (!dir.exists())
+                                {
+                                    logger.info("Attempting to copy web content to {}", new File(Constants.JOURNEYMAP_DIR, "web"));
+                                    boolean created = FileHandler.copyResources(dir, ResourceLocation.fromNamespaceAndPath(MOD_ID, "web"), "", false);
+                                    logger.info("Web content copied successfully: {}", created);
+                                }
+
+                                if (dir.exists())
+                                {
+                                    logger.info("Loading web content from local: {}", dir.getPath());
+                                    config.staticFiles.add(dir.getPath(), Location.EXTERNAL);
+                                }
+                                else
+                                {
+                                    logger.info("Loading web content from jar: {}", FileHandler.ASSETS_WEBMAP);
+                                    config.staticFiles.add(FileHandler.ASSETS_WEBMAP, Location.CLASSPATH);
+                                }
                             }
-                        }
-                    })
-                    .before(ctx -> {
-                        ctx.header("Access-Control-Allow-Origin", "*");
-                        ctx.header("Cache-Control", "no-cache");
-                    })
-                    .get("/waypoint/{id}/icon", Waypoints::iconGet)
-                    .get("/data/{type}", Data::dataGet)
-                    .get("/logs", Log::logGet)
-                    .get("/polygons", Polygons::polygonsGet)
-                    .get("/resources", Resources::resourcesGet)
-                    .get("/skin/{uuid}", Skin::skinGet)
-                    .get("/status", Status::statusGet)
-                    .get("/tiles/tile.png", Tiles::tilesGet);
+                        })
+                        .before(ctx -> {
+                            ctx.header("Access-Control-Allow-Origin", "*");
+                            ctx.header("Cache-Control", "no-cache");
+                        })
+                        .get("/waypoint/{id}/icon", Waypoints::iconGet)
+                        .get("/data/{type}", Data::dataGet)
+                        .get("/logs", Log::logGet)
+                        .get("/polygons", Polygons::polygonsGet)
+                        .get("/resources", Resources::resourcesGet)
+                        .get("/skin/{uuid}", Skin::skinGet)
+                        .get("/status", Status::statusGet)
+                        .get("/tiles/tile.png", Tiles::tilesGet);
+            }
+
             app.start(port);
         }
         catch (Exception e)

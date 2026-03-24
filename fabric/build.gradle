@@ -1,7 +1,7 @@
 import net.darkhax.curseforgegradle.TaskPublishCurseForge
 
 plugins {
-    id 'fabric-loom'
+    id 'net.fabricmc.fabric-loom'
     id 'multiloader-loader'
     id 'net.darkhax.curseforgegradle' version '1.+'
     id 'com.modrinth.minotaur' version '[2,3)'
@@ -9,13 +9,10 @@ plugins {
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings loom.layered() {
-        officialMojangMappings()
-    }
 
-    modCompileOnly group: 'info.journeymap', name: 'journeymap-api-fabric', version: "${project.journeymap_api_version}-${project.minecraft_version}-SNAPSHOT", changing: true
-    modImplementation "net.fabricmc:fabric-loader:${project.fabric_loader_version}"
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    compileOnly group: 'info.journeymap', name: 'journeymap-api-fabric', version: "${project.journeymap_api_version}-${project.minecraft_version}-SNAPSHOT", changing: true
+    implementation "net.fabricmc:fabric-loader:${project.fabric_loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
 
     implementation include(group: 'info.journeymap', name: 'webmap-client', version: project.journeymap_webmap_version, changing: true)
@@ -63,12 +60,8 @@ loom {
 //    main.kotlin.srcDirs = ['src/main/java', 'src/main/kotlin']
 //}
 
-remapJar {
-    archiveClassifier.set("")
-}
-
 artifacts {
-    archives remapJar
+    archives jar
 }
 
 // Automated upload to CurseForge for the win!
@@ -81,11 +74,11 @@ if (!project.hasProperty("modrinthApiKey")) {
 
 tasks.register("publishCurseForge", TaskPublishCurseForge) {
     apiToken = "${curseForgeApiKey}"
-    def mainFile = upload(curseforge_project_id, remapJar)
+    def mainFile = upload(curseforge_project_id, jar)
     mainFile.displayName = "${project.mod_id}-${version}+${project.name}"
     mainFile.releaseType = release_type
     mainFile.addModLoader("Fabric", "Quilt")
-    mainFile.addJavaVersion("Java 21")
+    mainFile.addJavaVersion("Java 25")
     mainFile.addGameVersion("${project.minecraft_version}")
     mainFile.addRelation("journeymap", "requiredDependency")
     mainFile.changelogType = "html"
@@ -100,7 +93,7 @@ modrinth {
     versionNumber = "${version}+${project.name}"
     versionName = "${project.mod_id}-${version}+${project.name}"
     versionType = release_type
-    uploadFile = remapJar
+    uploadFile = jar
     gameVersions = ["${project.minecraft_version}"]
     loaders = ["fabric", "quilt"]
     changelog = file("$project.buildDir/doc/changelog.html").exists() ? file("$project.buildDir/doc/changelog.html").text : null
@@ -110,7 +103,7 @@ modrinth {
 }
 
 
-tasks.withType(PublishToMavenRepository) { task -> task.dependsOn remapJar }
+tasks.withType(PublishToMavenRepository) { task -> task.dependsOn jar }
 
 publishing {
     repositories {
@@ -130,7 +123,7 @@ publishing {
             groupId project.group
             artifactId base.archivesName.get()
             version "${project.version}"
-            artifact remapJar
+            artifact jar
         }
     }
 }

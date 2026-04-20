@@ -71,9 +71,19 @@ repositories {
 
 }
 
+def journeymapCurseFileId = {
+    if ("fabric".equalsIgnoreCase(project.name)) {
+        return project.journeymap_fabric_version
+    } else if ("neoforge".equalsIgnoreCase(project.name)) {
+        return project.journeymap_neoforge_version
+    }
+    // common and forge compile against the forge file (journeymap common code is loader-agnostic)
+    return project.journeymap_forge_version
+}()
+
 dependencies {
     implementation group: 'info.journeymap', name: 'webmap-client', version: project.journeymap_webmap_version, changing: true
-    compileOnly "curse.maven:journeymap-32274:${project.journeymap_forge_version}"
+    compileOnly "curse.maven:journeymap-32274:${journeymapCurseFileId}"
     // for annotations
     implementation group: 'com.google.code.findbugs', name: 'jsr305', version: '3.0.1'
 //    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.2.21")

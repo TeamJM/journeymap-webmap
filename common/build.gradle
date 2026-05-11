@@ -21,7 +21,7 @@ dependencies {
     implementation 'org.jetbrains:annotations:20.1.0'
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
     compileOnly group: 'org.spongepowered', name: 'mixin', version: '0.8.5'
-    compileOnly group: 'info.journeymap', name: 'journeymap-api-common', version: "${project.journeymap_api_version}-${project.minecraft_version}-SNAPSHOT", changing: true
+    compileOnly group: 'info.journeymap', name: 'journeymap-api-common', version: "${project.journeymap_api_version}", changing: true
     // for annotations
     implementation group: 'com.google.code.findbugs', name: 'jsr305', version: '3.0.1'
     implementation group: 'io.javalin', name: 'javalin', version: project.javalin_version

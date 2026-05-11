@@ -22,7 +22,7 @@ configurations {
 dependencies {
     implementation minecraft.dependency("net.minecraftforge:forge:${minecraft_version}-${forge_version}")
     annotationProcessor 'net.minecraftforge:eventbus-validator:7.0-beta.10'
-    compileOnly group: 'info.journeymap', name: 'journeymap-api-forge', version: "${project.journeymap_api_version}-${project.minecraft_version}-SNAPSHOT", changing: true
+    compileOnly group: 'info.journeymap', name: 'journeymap-api-forge', version: "${project.journeymap_api_version}", changing: true
     implementation group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib', version: '2.2.21'
 
     shade group: 'info.journeymap', name: 'webmap-client', version: project.journeymap_webmap_version, changing: true
@@ -31,7 +31,7 @@ dependencies {
     shade group: 'io.javalin', name: 'javalin', version: project.javalin_version
     shade group: 'org.slf4j', name: 'slf4j-simple', version: '2.0.16'
 
-    testCompileOnly group: 'info.journeymap', name: 'journeymap-api-forge', version: "${project.journeymap_api_version}-${project.minecraft_version}-SNAPSHOT", changing: true
+    testCompileOnly group: 'info.journeymap', name: 'journeymap-api-forge', version: "${project.journeymap_api_version}", changing: true
 
 }
 

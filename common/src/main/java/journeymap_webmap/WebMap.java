@@ -14,6 +14,7 @@ import journeymap_webmap.routes.Status;
 import journeymap_webmap.routes.Tiles;
 import journeymap_webmap.routes.Waypoints;
 import net.minecraft.resources.Identifier;
+import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,7 +83,14 @@ public class WebMap
                             File dir = new File(FileHandler.getMinecraftDirectory(), Constants.WEB_DIR);
                             if (dir.exists())
                             {
-                                dir.delete();
+                                try
+                                {
+                                    FileUtils.deleteDirectory(dir);
+                                }
+                                catch (IOException e)
+                                {
+                                    logger.error("Failed to delete web content directory", e);
+                                }
                             }
                             if (!dir.exists())
                             {

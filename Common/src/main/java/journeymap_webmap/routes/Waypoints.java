@@ -3,6 +3,7 @@ package journeymap_webmap.routes;
 import io.javalin.http.ContentType;
 import io.javalin.http.Context;
 import journeymap.client.texture.TextureCache;
+import journeymap_webmap.mixin.NativeImageAccessor;
 
 import java.io.IOException;
 import java.nio.channels.Channels;
@@ -18,12 +19,12 @@ public class Waypoints
         if (img != null)
         {
             var nativeImage = img.getPixels();
-            if (nativeImage != null && nativeImage.pixels > 0)
+            if (nativeImage != null && ((NativeImageAccessor) (Object) nativeImage).getPixels() > 0)
             {
                 try (var channel = Channels.newChannel(ctx.outputStream()))
                 {
                     ctx.contentType(ContentType.IMAGE_PNG);
-                    nativeImage.writeToChannel(channel);
+                    ((NativeImageAccessor) (Object) nativeImage).invokeWriteToChannel(channel);
                     ctx.outputStream().flush();
                 }
                 catch (IOException e)

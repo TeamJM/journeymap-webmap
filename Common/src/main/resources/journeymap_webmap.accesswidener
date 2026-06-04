@@ -1,7 +1,0 @@
-accessWidener v1 named
-
-#method accessors
-accessible method com/mojang/blaze3d/platform/NativeImage writeToChannel (Ljava/nio/channels/WritableByteChannel;)Z
-accessible field com/mojang/blaze3d/platform/NativeImage pixels J
-
-

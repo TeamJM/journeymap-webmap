@@ -6,9 +6,8 @@ buildscript {
 }
 
 plugins {
-    id 'fabric-loom' version '1.10-SNAPSHOT'
-    id 'net.darkhax.curseforgegradle' version '1.+'
-    id 'io.github.juuxel.loom-quiltflower' version '1.8.0'
+    id 'fabric-loom' version '1.14-SNAPSHOT'
+    id 'net.darkhax.curseforgegradle' version '1.1.+'
 }
 
 apply plugin: 'org.jetbrains.kotlin.jvm'
@@ -52,15 +51,12 @@ ext {
     jmApiClassesDir = file("build/journeymap-api")
 }
 
-sourceCompatibility = JavaVersion.VERSION_21
-targetCompatibility = JavaVersion.VERSION_21
-
 def loaderName = "fabric"
 version = "${project.minecraft_version}-${project.mod_version}"
 def modVersion = "${project.mod_version}"
 
 group = project.group_id
-archivesBaseName = "${project.base_name}-${loaderName}"
+base.archivesName = "${project.base_name}-${loaderName}"
 configurations {
 //    shade
 }
@@ -71,7 +67,9 @@ configurations.all {
 }
 
 loom {
-    accessWidenerPath = file("src/main/resources/journeymap_webmap.accesswidener")
+    mixin {
+        useLegacyMixinAp = false
+    }
 }
 
 dependencies {
@@ -111,7 +109,6 @@ tasks.withType(JavaCompile) {
 }
 
 loom {
-    accessWidenerPath.set(project(":Common").file("src/main/resources/journeymap_webmap.accesswidener"))
     runs {
         client {
             client()
@@ -285,7 +282,7 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             groupId project.group
-            artifactId project.archivesBaseName
+            artifactId base.archivesName.get()
             version "${project.version}"
             artifact remapJar
         }

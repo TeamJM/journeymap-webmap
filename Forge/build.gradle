@@ -1,9 +1,5 @@
 buildscript {
     dependencies {
-        classpath group: 'net.minecraftforge.gradle', name: 'ForgeGradle', version: '6.0.23+', changing: true
-        classpath("io.github.goooler.shadow:shadow-gradle-plugin:8.1.7")
-        classpath 'org.parchmentmc:librarian:1.+'
-        classpath 'org.spongepowered:mixingradle:0.7.+'
         classpath group: 'com.modrinth.minotaur', name: 'Minotaur', version: '2.+'
         classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.20'
     }
@@ -11,15 +7,13 @@ buildscript {
 
 plugins {
     id 'idea'
-    id 'net.minecraftforge.gradle' version '[6.0,6.2)'
-    id 'org.spongepowered.mixin' version '0.7-SNAPSHOT'
-    id 'net.darkhax.curseforgegradle' version '1.+'
+    id 'net.minecraftforge.gradle' version '[7.0.2,8.0)'
+    id 'com.gradleup.shadow' version '9.0.0'
+    id 'net.darkhax.curseforgegradle' version '1.1.+'
 }
 
 apply plugin: 'org.jetbrains.kotlin.jvm'
 apply plugin: 'kotlin'
-apply plugin: 'io.github.goooler.shadow'
-apply plugin: 'org.parchmentmc.librarian.forgegradle'
 apply plugin: "com.modrinth.minotaur"
 apply plugin: "maven-publish"
 
@@ -28,7 +22,7 @@ version = "${project.minecraft_version}-${project.mod_version}"
 def modVersion = "${project.mod_version}"
 
 group = project.group_id
-archivesBaseName = "${project.base_name}-${loaderName}"
+base.archivesName = "${project.base_name}-${loaderName}"
 
 configurations {
     shade
@@ -37,6 +31,22 @@ configurations {
 configurations.all {
     // Check for snapshots more frequently than Gradle's default of 1 day. 0 = every build.
     resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
+}
+
+repositories {
+    // ForgeGradle 7 no longer auto-injects these; required for the Minecraft/Forge classpath.
+    // The Mavenizer publishes Gradle module metadata for the recompiled Minecraft/Forge
+    // artifacts. Scope it exclusively so other repos (e.g. the real Forge maven, which only
+    // ships a POM) can't shadow it and force selection of the non-recompiled variant.
+    exclusiveContent {
+        forRepository { maven minecraft.mavenizer }
+        filter {
+            includeGroupAndSubgroups('net.minecraft')
+            includeModule('net.minecraftforge', 'forge')
+        }
+    }
+    maven fg.forgeMaven
+    maven fg.minecraftLibsMaven
 }
 
 //jarJar.enable()
@@ -48,10 +58,8 @@ configurations.all {
 //    dependsOn("jarJar")
 //}
 
-minecraft.reobf = false
 dependencies {
-    minecraft "net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}"
-    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    implementation minecraft.dependency("net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}")
     implementation("net.sf.jopt-simple:jopt-simple:5.0.4") { version { strictly "5.0.4" } }
 
     compileOnly group: 'info.journeymap', name: 'journeymap-api-forge', version: "${project.journeymap_api_version}-${project.minecraft_version}-SNAPSHOT", changing: true
@@ -68,30 +76,18 @@ dependencies {
     compileOnly project(":Common")
 }
 
-mixin {
-    add sourceSets.main, "journeymap-refmap.json"
-}
-
 minecraft {
     mappings channel: "official", version: "${project.minecraft_version}"
 
-    copyIdeResources = true //Calls processResources when in dev
-
-    if (file("src/main/resources/META-INF/accesstransformer.cfg").exists()) {
-        accessTransformer = file("src/main/resources/META-INF/accesstransformer.cfg")
-    }
-
     runs {
-        client = {
-            // needed for deps with mixins.
-            property "mixin.debug.export", "true"
-            property "mixin.env.remapRefMap", "true"
-            property "mixin.env.refMapRemappingFile", "${buildDir}/createSrgToMcp/output.srg"
-            properties "forge.logging.console.level": "info"
-            properties "journeymap.map_testing": "true"
-
-
-            workingDirectory project.file("run/client")
+        configureEach {
+            systemProperty 'mixin.debug.export', 'true'
+            systemProperty 'forge.logging.console.level', 'info'
+            args '--mixin.config=journeymap_webmap.mixins.json'
+        }
+        register('client') {
+            systemProperty 'journeymap.map_testing', 'true'
+            workingDir.convention layout.projectDirectory.dir("run/client")
             mods {
                 modClientRun {
                     source sourceSets.main
@@ -99,15 +95,10 @@ minecraft {
                 }
             }
         }
-        server = {
-            arg "nogui"
-            property "mixin.debug.export", "true"
-            property "mixin.env.remapRefMap", "true"
-            property "mixin.env.refMapRemappingFile", "${buildDir}/createSrgToMcp/output.srg"
-            properties "forge.logging.console.level": "info"
-            properties "mixin.env.disableRefMap": "true"
-            properties "forge.logging.markers": "SCAN,REGISTRIES,REGISTRYDUMP"
-            workingDirectory project.file("run/server")
+        register('server') {
+            args 'nogui'
+            systemProperty 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
+            workingDir.convention layout.projectDirectory.dir("run/server")
             mods {
                 modServerRun {
                     source sourceSets.main
@@ -115,12 +106,6 @@ minecraft {
                 }
             }
         }
-    }
-}
-
-minecraft.runs.all {
-    lazyToken('minecraft_classpath') {
-        configurations.library.copyRecursive().resolve().collect { it.absolutePath }.join(File.pathSeparator)
     }
 }
 
@@ -229,7 +214,7 @@ jar {
                 "Implementation-Vendor"   : project.group_id,
                 "Implementation-URL"      : "http://journeymap.info",
                 "Implementation-Timestamp": getDate(),
-                "FMLAT"                   : "accesstransformer.cfg",
+                "MixinConfigs"            : "journeymap_webmap.mixins.json",
         ])
     }
 }
@@ -316,7 +301,7 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             groupId project.group
-            artifactId project.archivesBaseName
+            artifactId base.archivesName.get()
             version "${project.version}-forge"
             artifact shadowJar
         }

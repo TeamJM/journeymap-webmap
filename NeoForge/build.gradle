@@ -1,6 +1,5 @@
 buildscript {
     dependencies {
-        classpath("io.github.goooler.shadow:shadow-gradle-plugin:8.1.7")
         classpath group: 'com.modrinth.minotaur', name: 'Minotaur', version: '2.+'
         classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.20'
     }
@@ -11,11 +10,11 @@ plugins {
     id "java-library"
     id "idea"
     id 'net.neoforged.moddev'
-    id 'net.darkhax.curseforgegradle' version '1.+'
+    id 'com.gradleup.shadow' version '9.0.0'
+    id 'net.darkhax.curseforgegradle' version '1.1.+'
     id "com.modrinth.minotaur" version "2.+"
 }
 
-apply plugin: 'io.github.goooler.shadow'
 apply plugin: 'org.jetbrains.kotlin.jvm'
 apply plugin: 'kotlin'
 
@@ -24,7 +23,7 @@ version = "${project.minecraft_version}-${project.mod_version}"
 def modVersion = "${project.mod_version}"
 
 group = project.group_id
-archivesBaseName = "${project.base_name}-${loaderName}"
+base.archivesName = "${project.base_name}-${loaderName}"
 
 configurations {
     shade
@@ -37,11 +36,6 @@ configurations.all {
 
 neoForge {
     version = neoforge_version
-    // Automatically enable neoforge AccessTransformers if the file exists
-    def at = project(':Common').file('src/main/resources/META-INF/accesstransformer.cfg')
-    if (at.exists()) {
-        accessTransformers.from(at.absolutePath)
-    }
     addModdingDependenciesTo(sourceSets["test"])
     runs {
         configureEach {
@@ -190,7 +184,6 @@ jar {
                 "Implementation-Vendor"   : project.group_id,
                 "Implementation-URL"      : "http://journeymap.info",
                 "Implementation-Timestamp": getDate(),
-                "FMLAT"                   : "accesstransformer.cfg",
         ])
     }
 }
@@ -279,7 +272,7 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             groupId project.group
-            artifactId project.archivesBaseName
+            artifactId base.archivesName.get()
             version "${project.version}-forge"
             artifact shadowJar
         }

@@ -23,17 +23,17 @@ Client WebMap for Journeymap. Built: ${date}.
 [[dependencies.journeymap_webmap]]
 modId = "neoforge"
 type = "required"
-versionRange = "[26.1.0.1-beta,)"
+versionRange = "[26.2.0.0-beta,)"
 side="BOTH"
 
 [[dependencies.journeymap_webmap]]
 modId = "minecraft"
 type = "required"
-versionRange = "[26.1,)"
+versionRange = "[26.2,)"
 side="BOTH"
 
 [[dependencies.journeymap_webmap]]
 modId="journeymap"
 type = "required"
-versionRange="[26.1-6.0.0-beta.45,)"
+versionRange="[26.2-6.0.0-beta.45,)"
 side="BOTH"

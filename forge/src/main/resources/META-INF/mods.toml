@@ -20,18 +20,18 @@ Client WebMap for Journeymap. Built: ${date}.
 [[dependencies.journeymap_webmap]]
 modId="forge"
 mandatory=true
-versionRange="[50.0.0,)"
+versionRange="[65.0.0,)"
 side="CLIENT"
 
 [[dependencies.journeymap_webmap]]
 modId = "minecraft"
 mandatory=true
-versionRange = "[1.21,)"
+versionRange = "[26.2,)"
 side="CLIENT"
 
 [[dependencies.journeymap_webmap]]
 modId="journeymap"
 mandatory=true
-versionRange="[1.21.1-6.0.0-beta.45,),[1.21.4-6.0.0-beta.45,),[1.21.5-6.0.0-beta.45,)"
+versionRange="[26.2-6.0.0-beta.45,)"
 side="CLIENT"
 

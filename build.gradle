@@ -96,7 +96,7 @@ subprojects {
     }
 
     compileKotlin {
-        source(project(":Common").sourceSets.main.allSource)
+        source(project(":common").sourceSets.main.allSource)
         inputs.file "../gradle.properties"
         kotlinOptions {
             jvmTarget = "21"

@@ -82,7 +82,7 @@ dependencies {
     modCompileOnly group: 'info.journeymap', name: 'journeymap-api-fabric', version: "${project.journeymap_api_version}-${project.minecraft_version}-SNAPSHOT", changing: true
     modImplementation "net.fabricmc:fabric-loader:${project.fabric_loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
-    compileOnly project(":Common")
+    compileOnly project(":common")
 
     implementation include(group: 'info.journeymap', name: 'webmap-client', version: project.journeymap_webmap_version, changing: true)
     implementation include(group: 'io.javalin', name: 'javalin', version: project.javalin_version)
@@ -104,7 +104,7 @@ dependencies {
 }
 
 tasks.withType(JavaCompile) {
-    source(project(":Common").sourceSets.main.allSource)
+    source(project(":common").sourceSets.main.allSource)
     options.encoding = "UTF-8"
 }
 
@@ -145,7 +145,7 @@ def replaceProperties = [version   : modVersion,
                          date      : getDate(),]
 
 processResources() {
-    from project(":Common").sourceSets.main.resources
+    from project(":common").sourceSets.main.resources
     // this will ensure that this task is redone when the versions change.
     inputs.properties replaceProperties
     filesMatching(resourceTargets) {

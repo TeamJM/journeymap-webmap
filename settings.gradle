@@ -56,7 +56,7 @@ plugins {
 }
 
 rootProject.name = 'journeymap_webmap'
-include("Common")
-include("Fabric")
-include("Forge")
-include("NeoForge")
+include("common")
+include("fabric")
+include("forge")
+include("neoforge")

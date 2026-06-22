@@ -2,9 +2,8 @@ import net.darkhax.curseforgegradle.TaskPublishCurseForge
 
 plugins {
     id 'multiloader-loader'
-//    id 'net.minecraftforge.accesstransformers' version '5.0.2'
     id 'net.minecraftforge.gradle' version '[7.0.11,8.0)'
-    id "net.darkhax.curseforgegradle" version "1.+"
+    id "net.darkhax.curseforgegradle" version "1.1.+"
     id "com.modrinth.minotaur" version "2.+"
     id 'com.gradleup.shadow'
 }
@@ -37,8 +36,6 @@ dependencies {
 
 minecraft {
 //    mappings channel: project.mappings_channel, version: "${project.mappings_mc_version}-${project.mappings_date}"
-
-    accessTransformers = files('../common/src/main/resources/META-INF/accesstransformer.cfg')
 
     runs {
         configureEach {
@@ -137,6 +134,14 @@ modrinth {
     changelog = file("$project.buildDir/doc/changelog.html").exists() ? file("$project.buildDir/doc/changelog.html").text : null
     dependencies {
         required.project "journeymap"
+    }
+}
+
+jar {
+    manifest {
+        attributes([
+                "MixinConfigs": "journeymap_webmap.mixins.json",
+        ])
     }
 }
 

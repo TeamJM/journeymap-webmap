@@ -11,6 +11,7 @@ import journeymap.client.model.map.MapType;
 import journeymap.client.render.map.RegionTile;
 import journeymap.common.helper.DimensionHelper;
 import journeymap_webmap.WebMap;
+import journeymap_webmap.mixin.NativeImageAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
@@ -134,7 +135,7 @@ public class Tiles
         try
         {
             ctx.contentType(ContentType.IMAGE_PNG);
-            img.writeToChannel(Channels.newChannel(output));
+            ((NativeImageAccessor) (Object) img).invokeWriteToChannel(Channels.newChannel(output));
             output.flush();
         }
         catch (EofException e)

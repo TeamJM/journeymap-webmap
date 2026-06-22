@@ -8,6 +8,7 @@ import journeymap.client.render.draw.MobIconCache;
 import journeymap.client.texture.TextureCache;
 import journeymap.common.Journeymap;
 import journeymap_webmap.Constants;
+import journeymap_webmap.mixin.NativeImageAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.Identifier;
@@ -83,11 +84,11 @@ public class Resources
         }
 
         ctx.contentType("image/" + extension);
-        if (img != null && img.pixels > 0)
+        if (img != null && ((NativeImageAccessor) (Object) img).getPixels() > 0)
         {
             try
             {
-                img.writeToChannel(Channels.newChannel(ctx.outputStream()));
+                ((NativeImageAccessor) (Object) img).invokeWriteToChannel(Channels.newChannel(ctx.outputStream()));
                 ctx.outputStream().flush();
             }
             catch (Exception e)

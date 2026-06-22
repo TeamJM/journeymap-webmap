@@ -3,6 +3,9 @@ loaderVersion="[2,)" #
 issueTrackerURL="https://github.com/TeamJM/journeymap/issues"
 license="All rights reserved"
 
+[[mixins]]
+config = "journeymap_webmap.mixins.json"
+
 [[mods]]
 modId="journeymap_webmap"
 version="${version}"

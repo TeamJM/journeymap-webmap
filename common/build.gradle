@@ -1,46 +1,37 @@
 plugins {
-    id 'idea'
-    id 'java'
-    id 'net.neoforged.moddev'
-    id 'maven-publish'
+    id 'multiloader-common'
+    id 'net.neoforged.moddev.legacyforge'
 }
 
-
-version = "${project.mod_version}+${project.minecraft_version}"
-def modVersion = "${project.mod_version}"
-
-group = project.group_id
-base.archivesName = project.base_name
-
-configurations {
-    shade
-}
-
-
-neoForge {
-    neoFormVersion = neo_form_version
-    addModdingDependenciesTo(sourceSets["test"])
+// 1.20.1 Forge is SRG at runtime; the legacyForge moddev plugin compiles against mojmap + parchment.
+// webmap ships no access transformer, so none is registered here.
+legacyForge {
+    mcpVersion = minecraft_version
+    parchment {
+        minecraftVersion = parchment_minecraft
+        mappingsVersion = parchment_version
+    }
 }
 
 dependencies {
-    implementation 'org.jetbrains:annotations:20.1.0'
-    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
-    compileOnly group: 'org.spongepowered', name: 'mixin', version: '0.8.5'
-    compileOnly group: 'info.journeymap', name: 'journeymap-api-common', version: "${project.journeymap_api_version}-${project.minecraft_version}-SNAPSHOT", changing: true
-    // for annotations
-    implementation group: 'com.google.code.findbugs', name: 'jsr305', version: '3.0.1'
-    implementation group: 'io.javalin', name: 'javalin', version: project.javalin_version
+    // The public JourneyMap API (common variant). compileOnly - provided by the installed journeymap.
+    compileOnly group: 'info.journeymap', name: 'journeymap-api-common', version: project.journeymap_api_version, changing: true
 }
 
-task processDocs(type: Copy) {
-    // update docs
-    from(file("/doc/")) {
-        include '*.html'
-        expand 'version': project.version,
-                'date': getDate(),
-                'mcversion': project.minecraft_version,
-                'loaderversion': project.forge_version,
-                'loadername': "Forge"
+// Expose common's SOURCE + resources to the loader modules (they compile the source directly rather than
+// depending on a common jar - see multiloader-loader). Mirrors journeymap-1.20.1.
+configurations {
+    commonJava {
+        canBeResolved = false
+        canBeConsumed = true
     }
-    into 'build/doc'
+    commonResources {
+        canBeResolved = false
+        canBeConsumed = true
+    }
+}
+
+artifacts {
+    commonJava(file('src/main/java'))
+    commonResources sourceSets.main.resources.sourceDirectories.singleFile
 }

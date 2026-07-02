@@ -87,7 +87,7 @@ public class WebMap
                             if (!dir.exists())
                             {
                                 logger.info("Attempting to copy web content to {}", new File(Constants.JOURNEYMAP_DIR, "web"));
-                                boolean created = FileHandler.copyResources(dir, ResourceLocation.fromNamespaceAndPath(MOD_ID, "web"), "", false);
+                                boolean created = FileHandler.copyResources(dir, new ResourceLocation(MOD_ID, "web"), "", false);
                                 logger.info("Web content copied successfully: {}", created);
                             }
 

@@ -8,7 +8,6 @@ import journeymap.client.render.draw.MobIconCache;
 import journeymap.client.texture.TextureCache;
 import journeymap.common.Journeymap;
 import journeymap_webmap.Constants;
-import journeymap_webmap.mixin.NativeImageAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import org.apache.logging.log4j.Logger;
@@ -17,7 +16,6 @@ import org.eclipse.jetty.io.EofException;
 import javax.imageio.IIOException;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.nio.channels.Channels;
 import java.util.Arrays;
 import java.util.List;
 
@@ -30,7 +28,7 @@ public class Resources
     {
         NativeImage img;
         String resource = ctx.queryParam("resource");
-        ResourceLocation resourceLocation = resource != null ? ResourceLocation.parse(resource) : null;
+        ResourceLocation resourceLocation = resource != null ? new ResourceLocation(resource) : null;
         boolean close = false;
         String extension = resource != null ? resource.substring(resource.lastIndexOf('.') + 1) : null;
 
@@ -83,11 +81,11 @@ public class Resources
         }
 
         ctx.contentType("image/" + extension);
-        if (img != null && ((NativeImageAccessor) (Object) img).getPixels() > 0)
+        if (img != null)
         {
             try
             {
-                ((NativeImageAccessor) (Object) img).invokeWriteToChannel(Channels.newChannel(ctx.outputStream()));
+                ctx.outputStream().write(img.asByteArray());
                 ctx.outputStream().flush();
             }
             catch (Exception e)

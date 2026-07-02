@@ -11,7 +11,6 @@ import journeymap.client.model.map.MapType;
 import journeymap.client.render.map.RegionTile;
 import journeymap.common.helper.DimensionHelper;
 import journeymap_webmap.WebMap;
-import journeymap_webmap.mixin.NativeImageAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
@@ -20,7 +19,6 @@ import org.eclipse.jetty.io.EofException;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.channels.Channels;
 import java.nio.file.Files;
 
 public class Tiles
@@ -135,7 +133,7 @@ public class Tiles
         try
         {
             ctx.contentType(ContentType.IMAGE_PNG);
-            ((NativeImageAccessor) (Object) img).invokeWriteToChannel(Channels.newChannel(output));
+            output.write(img.asByteArray());
             output.flush();
         }
         catch (EofException e)

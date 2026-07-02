@@ -5,11 +5,9 @@ import com.mojang.blaze3d.platform.NativeImage;
 import io.javalin.http.ContentType;
 import io.javalin.http.Context;
 import journeymap.client.texture.IgnSkin;
-import journeymap_webmap.mixin.NativeImageAccessor;
 import net.minecraft.client.Minecraft;
 
 import java.io.IOException;
-import java.nio.channels.Channels;
 import java.util.UUID;
 
 public class Skin
@@ -30,12 +28,12 @@ public class Skin
             img = IgnSkin.getFace(profile).getPixels();
         }
 
-        if (img != null && ((NativeImageAccessor) (Object) img).getPixels() > 0)
+        if (img != null)
         {
-            try (var channel = Channels.newChannel(ctx.outputStream()))
+            try
             {
                 ctx.contentType(ContentType.IMAGE_PNG);
-                ((NativeImageAccessor) (Object) img).invokeWriteToChannel(channel);
+                ctx.outputStream().write(img.asByteArray());
                 ctx.outputStream().flush();
                 if (close)
                 {

@@ -1,119 +1,21 @@
-buildscript {
-    dependencies {
-        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.20'
-    }
-}
-
 plugins {
-    id 'net.neoforged.moddev' version '2.0.140' apply false
+    // see https://fabricmc.net/develop/ for new versions
+    id 'fabric-loom' version '1.17-SNAPSHOT' apply false
+    // see https://projects.neoforged.net/neoforged/moddevgradle for new versions
+    id 'net.neoforged.moddev.legacyforge' version '2.0.140' apply false
 }
 
-configurations.all {
+// Per-module configuration lives in the buildSrc convention plugins (multiloader-common /
+// multiloader-loader) and the per-loader build.gradle files. ForgeGradle 7, the renamer, shadow and
+// the publishing plugins are declared in the forge/fabric modules that use them.
+
+configurations.configureEach {
     // Check for snapshots more frequently than Gradle's default of 1 day. 0 = every build.
     resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
 }
 
-subprojects {
-    apply plugin: 'java'
-    apply plugin: 'org.jetbrains.kotlin.jvm'
-    apply plugin: 'kotlin'
-
-    sourceSets {
-        main.kotlin.srcDirs = ['src/main/java', 'src/main/kotlin']
+tasks.configureEach { task ->
+    if (task instanceof Copy || task instanceof AbstractArchiveTask) {
+        task.duplicatesStrategy = DuplicatesStrategy.INCLUDE
     }
-
-    sourceSets.main.resources { srcDir 'src/generated/resources' }
-
-    java.toolchain.languageVersion = JavaLanguageVersion.of(21)
-    java.withSourcesJar()
-
-    jar {
-        dependsOn 'processDocs'
-        duplicatesStrategy = DuplicatesStrategy.INCLUDE
-        manifest {
-            attributes([
-                    "Specification-Title"     : project.name,
-                    "Specification-Vendor"    : project.group_id,
-                    "Specification-Version"   : "1", // We are version 1 of ourselves
-                    "Implementation-Title"    : project.name,
-                    "Implementation-Version"  : "${version}",
-                    "Implementation-Vendor"   : project.group_id,
-                    "Implementation-URL"      : "http://journeymap.info",
-                    "Implementation-Timestamp": getDate()
-            ])
-        }
-    }
-
-    repositories {
-
-        mavenCentral()
-
-        maven {
-            name = 'Sponge / Mixin'
-            url = 'https://repo.spongepowered.org/repository/maven-public/'
-        }
-        maven {
-            name = "JourneyMap (Public)"
-            url = "https://jm.gserv.me/repository/maven-public/"
-        }
-        maven {
-            url "https://www.cursemaven.com"
-        }
-
-        maven {
-            name = 'BlameJared Maven (CrT / Bookshelf)'
-            url = 'https://maven.blamejared.com'
-        }
-        // used for local mods in the libs folder
-        flatDir {
-            dirs '../libs'
-        }
-    }
-
-    dependencies {
-        implementation group: 'info.journeymap', name: 'webmap-client', version: project.journeymap_webmap_version, changing: true
-        compileOnly "curse.maven:journeymap-32274:${project.journeymap_forge_version}"
-        // for annotations
-        implementation group: 'com.google.code.findbugs', name: 'jsr305', version: '3.0.1'
-        implementation group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib', version: '2.1.20'
-        // external libs
-//        implementation 'org.slf4j:slf4j-api:2.0.16'
-        implementation group: 'javax.servlet', name: 'javax.servlet-api', version: '4.0.1'
-        implementation group: 'io.javalin', name: 'javalin', version: project.javalin_version
-        testImplementation "curse.maven:journeymap-32274:${project.journeymap_forge_version}"
-    }
-
-    plugins.withType(JavaPlugin) {
-        dependencies {
-            implementation enforcedPlatform('org.slf4j:slf4j-api:2.0.16')
-        }
-    }
-
-
-    tasks.withType(JavaCompile).configureEach {
-        it.options.encoding = 'UTF-8'
-        it.options.release = 21
-    }
-
-    compileKotlin {
-        source(project(":common").sourceSets.main.allSource)
-        inputs.file "../gradle.properties"
-        kotlinOptions {
-            jvmTarget = "21"
-            freeCompilerArgs += "-Xopt-in=kotlin.RequiresOptIn"
-        }
-    }
-
-    // Disables Gradle's custom module metadata from being published to maven. The
-    // metadata includes mapped dependencies which are not reasonably consumable by
-    // other mod developers.
-    tasks.withType(GenerateModuleMetadata) {
-        enabled = false
-    }
-}
-
-def getDate() {
-    def date = new Date()
-    def formattedDate = date.format(project.dateFormat)
-    return formattedDate
 }

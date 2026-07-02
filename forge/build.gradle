@@ -1,43 +1,25 @@
-buildscript {
-    dependencies {
-        classpath group: 'com.modrinth.minotaur', name: 'Minotaur', version: '2.+'
-        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.20'
-    }
-}
+import net.darkhax.curseforgegradle.TaskPublishCurseForge
 
 plugins {
-    id 'idea'
+    id 'multiloader-loader'
     id 'net.minecraftforge.gradle' version '[7.0.2,8.0)'
     id 'com.gradleup.shadow' version '9.0.0'
+    // Reobfuscates the shipped jar (classes) to SRG names - required for Forge 1.20.1's SRG runtime.
+    // FG7 compiles webmap against MOJMAP; the installed forge maps net.minecraft.* members to SRG at runtime.
+    id 'net.minecraftforge.renamer' version '1.1.0'
     id 'net.darkhax.curseforgegradle' version '1.1.+'
+    id 'com.modrinth.minotaur' version '2.+'
+    id 'maven-publish'
 }
 
-apply plugin: 'org.jetbrains.kotlin.jvm'
-apply plugin: 'kotlin'
-apply plugin: "com.modrinth.minotaur"
-apply plugin: "maven-publish"
-
-def loaderName = "forge"
-version = "${project.minecraft_version}-${project.mod_version}"
-def modVersion = "${project.mod_version}"
-
-group = project.group_id
-base.archivesName = "${project.base_name}-${loaderName}"
+def loaderName = 'forge'
 
 configurations {
     shade
 }
 
-configurations.all {
-    // Check for snapshots more frequently than Gradle's default of 1 day. 0 = every build.
-    resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
-}
-
 repositories {
     // ForgeGradle 7 no longer auto-injects these; required for the Minecraft/Forge classpath.
-    // The Mavenizer publishes Gradle module metadata for the recompiled Minecraft/Forge
-    // artifacts. Scope it exclusively so other repos (e.g. the real Forge maven, which only
-    // ships a POM) can't shadow it and force selection of the non-recompiled variant.
     exclusiveContent {
         forRepository { maven minecraft.mavenizer }
         filter {
@@ -49,73 +31,90 @@ repositories {
     maven fg.minecraftLibsMaven
 }
 
-//jarJar.enable()
-//
-//tasks.jarJar.configure {
-//    archiveClassifier.set("")
-//}
-//tasks.named("assemble").configure {
-//    dependsOn("jarJar")
-//}
-
 dependencies {
     implementation minecraft.dependency("net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}")
     implementation("net.sf.jopt-simple:jopt-simple:5.0.4") { version { strictly "5.0.4" } }
 
-    compileOnly group: 'info.journeymap', name: 'journeymap-api-forge', version: "${project.journeymap_api_version}-${project.minecraft_version}-SNAPSHOT", changing: true
-    implementation group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib', version: '2.1.20'
+    // The forge variant of the public API. Provided by the installed journeymap at runtime; not bundled.
+    compileOnly group: 'info.journeymap', name: 'journeymap-api-forge', version: project.journeymap_api_version, changing: true
 
+    // Bundled payload (shadowJar over the `shade` config). shade resolves transitively, so `shade javalin`
+    // pulls the jetty stack + kotlin-stdlib into the fat jar; the relocations below move them out of the
+    // way. Compile access comes from the convention's `implementation` deps.
     shade group: 'info.journeymap', name: 'webmap-client', version: project.journeymap_webmap_version, changing: true
-
-    //external libs shade
     shade group: 'io.javalin', name: 'javalin', version: project.javalin_version
     shade group: 'org.slf4j', name: 'slf4j-simple', version: '2.0.16'
-
-    testCompileOnly group: 'info.journeymap', name: 'journeymap-api-forge', version: "${project.journeymap_api_version}-${project.minecraft_version}-SNAPSHOT", changing: true
-
-    compileOnly project(":common")
 }
 
 minecraft {
-    mappings channel: "official", version: "${project.minecraft_version}"
+    mappings channel: 'official', version: "${project.minecraft_version}"
 
     runs {
         configureEach {
-            systemProperty 'mixin.debug.export', 'true'
             systemProperty 'forge.logging.console.level', 'info'
-            args '--mixin.config=journeymap_webmap.mixins.json'
         }
         register('client') {
             systemProperty 'journeymap.map_testing', 'true'
             workingDir.convention layout.projectDirectory.dir("run/client")
-            mods {
-                modClientRun {
-                    source sourceSets.main
-                    source project(":common").sourceSets.main
-                }
-            }
         }
         register('server') {
             args 'nogui'
             systemProperty 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
             workingDir.convention layout.projectDirectory.dir("run/server")
-            mods {
-                modServerRun {
-                    source sourceSets.main
-                    source project(":common").sourceSets.main
-                }
-            }
         }
     }
 }
 
+// Reobfuscate the shipped fat (shadow) jar to SRG names for Forge 1.20.1's SRG runtime. FG7 compiles
+// webmap's net.minecraft.* references as MOJMAP; the runtime resolves them as SRG. Only webmap's own
+// classes carry MC references - the shaded (relocated) libraries have none, so they pass through untouched.
+// NOTE: must come AFTER the dependencies block - minecraft.dependency.toSrgFile requires
+// minecraft.dependency(...) to be declared first, else FG7 fails config with "Mavenizer instance not found".
+renamer.mappings.from minecraft.dependency.toSrgFile
+
+// Reobf the shadowJar IN PLACE (overwrite its own output) so the distributable keeps the clean released
+// name. renamer.classes() auto-seeds its single map from the global renamer.mappings (toSrgFile above).
+def reobfJar = renamer.classes(tasks.named('shadowJar')) {
+    accessTransformers = false
+    output = tasks.named('shadowJar').flatMap { it.archiveFile }
+}
+
+// Shadow re-asserts `Multi-Release: true` in the manifest regardless of the shadowJar manifest block, and
+// the reobf drops the versioned overlay - so strip the attribute from the finished jar here, after reobf
+// has written it, to avoid securejarhandler's `NoSuchFileException: /META-INF/versions` at mod discovery.
+reobfJar.configure {
+    doLast {
+        def jarPath = tasks.named('shadowJar').get().archiveFile.get().asFile.toPath()
+        def uri = java.net.URI.create("jar:" + jarPath.toUri())
+        java.nio.file.FileSystems.newFileSystem(uri, [:]).withCloseable { fs ->
+            def mf = fs.getPath("META-INF/MANIFEST.MF")
+            def kept = java.nio.file.Files.readAllLines(mf).findAll { !it.toLowerCase().startsWith("multi-release") }
+            java.nio.file.Files.write(mf, kept)
+        }
+    }
+}
+
+tasks.named('shadowJar').configure {
+    finalizedBy reobfJar
+}
+
+// The reobf overwrites the shadowJar output in place, so upload/publish tasks reading it must run after.
+tasks.matching { it.name.startsWith('publish') || it.name.startsWith('modrinth') || it.name.startsWith('curseforge') }.configureEach {
+    mustRunAfter reobfJar
+}
 
 shadowJar {
-    mustRunAfter(processTestResources)
     archiveFileName.set("${archiveBaseName.get()}-${archiveVersion.get()}.${archiveExtension.get()}")
     configurations = [project.configurations.shade]
     archiveClassifier.set("")
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    // Some shaded libs (jetty, kotlin-stdlib, slf4j) are multi-release jars. Shadow merges their
+    // `Multi-Release: true` manifest attr into the fat jar and re-asserts it over any manifest block, but
+    // the SRG reobf step below drops the META-INF/versions/ overlay - leaving a manifest that claims MR
+    // with no versions dir, which makes Forge 1.20.1's securejarhandler throw
+    // `NoSuchFileException: /META-INF/versions` at mod discovery. Drop the overlay here (base classes are
+    // correct on the Java 17 runtime); the leftover Multi-Release attr is stripped after reobf (below).
+    exclude 'META-INF/versions/**'
     dependencies {
         exclude("META-INF/maven/**")
         exclude("META-INF/services/org.*")
@@ -123,7 +122,7 @@ shadowJar {
         exclude(dependency("org.ow2.asm:.*:.*"))
     }
     minimize {
-        // API has utility classes that must be included
+        // API/frontend have utility classes reached only reflectively; keep them.
         exclude(dependency("info.journeymap:.*:.*"))
         exclude(dependency("org.slf4j:.*:.*"))
     }
@@ -134,103 +133,35 @@ shadowJar {
     relocate "org.jetbrains", "info.journeymap.shaded.org.jetbrains"
     relocate "org.slf4j", "info.journeymap.shaded.org.slf4j"
     relocate "org.eclipse", "info.journeymap.shaded.org.eclipse"
-
     relocate "io.javalin", "info.journeymap.shaded.io.javalin"
 
     exclude 'dummyThing'
     exclude 'LICENSE.txt'
 }
 
-tasks.withType(JavaCompile) {
-    source(project(":common").sourceSets.main.allSource)
-    options.encoding = "UTF-8"
-}
-
-
-// This block of code expands all the gradle properties in the specified resource targets.
-// It copies them into the targets and expands all the defined properties.
-def resourceTargets = ['META-INF/mods.toml', 'pack.mcmeta', 'license.txt']
-def intoTargets = ["$rootDir/out/production/resources/", "$rootDir/out/production/${project.name}.main/", "$rootDir/bin/main/"]
-def replaceProperties = [
-        version     : project.version,
-        modVersion  : modVersion,
-        mcversion   : project.minecraft_version,
-        date        : getDate()
-]
-
-processResources() {
-    from project(":common").sourceSets.main.resources
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    //    duplicatesStrategy = DuplicatesStrategy.INCLUDE
-    // this will ensure that this task is redone when the versions change.
-    inputs.properties replaceProperties
-    filesMatching(resourceTargets) {
-        expand replaceProperties
-    }
-
-    intoTargets.each { target ->
-        if (file(target).exists()) {
-            copy {
-                from(sourceSets.main.resources) {
-                    include resourceTargets
-                    expand replaceProperties
-                }
-                into target
-            }
-        }
-    }
-}
-
-task processDocs(type: Copy) {
-    // update docs
-    from(file("../doc/")) {
-        include '*.html'
-        expand 'version': project.version,
-                'date': getDate(),
-                'mcversion': project.minecraft_version,
-                'loaderversion': project.forge_version,
-                'loadername': "Forge"
-    }
-    into 'build/doc'
-}
-
 tasks.assemble.dependsOn shadowJar
-
-clean.doFirst {
-    // Remove the Webpack bundled assets as part of the clean task
-    delete "$projectDir/src/main/resources/assets/journeymap/web/"
-}
+jar.finalizedBy 'shadowJar'
 
 jar {
     archiveClassifier.set('slim')
-    dependsOn 'processDocs'
     manifest {
         attributes([
                 "Specification-Title"     : project.name,
                 "Specification-Vendor"    : project.group_id,
-                "Specification-Version"   : "1", // We are version 1 of ourselves
+                "Specification-Version"   : "1",
                 "Implementation-Title"    : project.name,
                 "Implementation-Version"  : "${version}",
                 "Implementation-Vendor"   : project.group_id,
-                "Implementation-URL"      : "http://journeymap.info",
-                "Implementation-Timestamp": getDate(),
-                "MixinConfigs"            : "journeymap_webmap.mixins.json",
+                "Implementation-URL"      : "http://journeymap.info"
         ])
     }
 }
-
 
 artifacts {
     archives shadowJar
 }
 
-def getDate() {
-    def date = new Date()
-    def formattedDate = date.format(project.dateFormat)
-    return formattedDate
-}
-
-// Automated upload to CurseForge for the win!
+// Automated upload to CurseForge / Modrinth.
 if (!project.hasProperty("curseForgeApiKey")) {
     ext.curseForgeApiKey = project.findProperty("curseforge_api_key") ?: "notset"
 }
@@ -238,18 +169,17 @@ if (!project.hasProperty("modrinthApiKey")) {
     ext.modrinthApiKey = project.findProperty("modrinth_api_key") ?: "notset"
 }
 
-task publishCurseForge(type: net.darkhax.curseforgegradle.TaskPublishCurseForge) {
-
+tasks.register("publishCurseForge", TaskPublishCurseForge) {
     apiToken = "${curseForgeApiKey}"
     def mainFile = upload(curseforge_project_id, shadowJar)
     mainFile.displayName = "${project.mod_id}-${version}+${loaderName}"
     mainFile.releaseType = release_type
     mainFile.addModLoader("Forge")
-    mainFile.addJavaVersion("Java 21")
-    mainFile.addGameVersion("${project.minecraft_version}", "1.21.1", "1.21.5", "1.21.8")
+    mainFile.addJavaVersion("Java ${java_version}")
+    mainFile.addGameVersion("${project.minecraft_version}")
     mainFile.addRelation("journeymap", "requiredDependency")
     mainFile.changelogType = "html"
-    mainFile.changelog = file("$project.buildDir/doc/changelog.html")
+    mainFile.changelog = file("${layout.buildDirectory.get()}/doc/changelog.html")
 }
 
 tasks.modrinth.dependsOn(tasks.build)
@@ -261,9 +191,9 @@ modrinth {
     versionName = "${project.mod_id}-${version}+${loaderName}"
     versionType = release_type
     uploadFile = shadowJar
-    gameVersions = ["${project.minecraft_version}", "1.21.1", "1.21.5", "1.21.8"]
+    gameVersions = ["${project.minecraft_version}"]
     loaders = ["forge"]
-    changelog = file('/build/doc/changelog.html').exists() ? file('/build/doc/changelog.html').text : null
+    changelog = file("${layout.buildDirectory.get()}/doc/changelog.html").exists() ? file("${layout.buildDirectory.get()}/doc/changelog.html").text : null
     dependencies {
         required.project "journeymap"
     }
@@ -272,32 +202,23 @@ modrinth {
 // Ensure build is done prior to cursegradle tasks
 project.afterEvaluate {
     project.tasks.findAll { task ->
-        (task.name.startsWith('curseforge') || task.name.startsWith('modrinth'))
-                && (task.name != 'curseforge' || task.name != 'modrinth')
-    }.each { projectTask ->
-        projectTask.dependsOn build
-    }
+        (task.name.startsWith('curseforge') || task.name.startsWith('modrinth')) && (task.name != 'curseforge' || task.name != 'modrinth')
+    }.each { projectTask -> projectTask.dependsOn build }
 }
-tasks.withType(PublishToMavenRepository) { task ->
-    task.dependsOn shadowJar
-}
-tasks.named('assemble').configure { dependsOn 'shadowJar' }
 
-jar.finalizedBy 'shadowJar'
+tasks.withType(PublishToMavenRepository) { task -> task.dependsOn shadowJar }
 
 publishing {
     repositories {
         maven {
             name = "JourneyMap"
             url = uri("https://jm.gserv.me/repository/maven-releases/")
-
             credentials {
                 username = project.findProperty("journeymap.user") ?: System.getenv("JOURNEYMAP_WEB_USER")
                 password = project.findProperty("journeymap.password") ?: System.getenv("JOURNEYMAP_WEB_PASSWORD")
             }
         }
     }
-
     publications {
         mavenJava(MavenPublication) {
             groupId project.group

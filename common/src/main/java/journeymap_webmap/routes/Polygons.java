@@ -6,7 +6,7 @@ import com.google.gson.reflect.TypeToken;
 import io.javalin.http.ContentType;
 import io.javalin.http.Context;
 import journeymap.api.client.impl.ClientAPI;
-import journeymap.api.v2.client.display.Context.UI;
+import journeymap.api.v2.common.Context.UI;
 import journeymap.api.v2.client.display.PolygonOverlay;
 import journeymap.api.v2.client.model.MapPolygon;
 import journeymap.api.v2.client.util.UIState;

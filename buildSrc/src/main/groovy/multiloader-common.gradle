@@ -1,0 +1,161 @@
+plugins {
+    id 'java-library'
+    id 'java'
+    id 'idea'
+}
+
+// Per-loader archive name: journeymap-webmap-common / -fabric / -forge.
+base {
+    archivesName = "${project.base_name}-${project.name}"
+}
+version = "${project.minecraft_version}-${project.mod_version}"
+group = project.group_id
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(java_version)
+}
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+    maven {
+        name = 'JourneyMap (Public)'
+        url = 'https://jm.gserv.me/repository/maven-public/'
+    }
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = 'Sponge'
+                url = 'https://repo.spongepowered.org/repository/maven-public'
+            }
+        }
+        filter { includeGroupAndSubgroups('org.spongepowered') }
+    }
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = 'Fabric'
+                url = uri('https://maven.fabricmc.net')
+            }
+        }
+        filter {
+            includeGroup('net.fabricmc')
+            includeGroup('net.fabricmc.unpick')
+            includeGroup('fabric-loom')
+        }
+    }
+    exclusiveContent {
+        forRepositories(
+                maven {
+                    name = 'ParchmentMC'
+                    url = 'https://maven.parchmentmc.org/'
+                },
+                maven {
+                    name = 'NeoForge'
+                    url = 'https://maven.neoforged.net/releases'
+                }
+        )
+        filter { includeGroup('org.parchmentmc.data') }
+    }
+    maven {
+        name = 'BlameJared'
+        url = 'https://maven.blamejared.com'
+    }
+    maven {
+        url 'https://www.cursemaven.com'
+    }
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = 'Modrinth'
+                url = 'https://api.modrinth.com/maven'
+            }
+        }
+        filter { includeGroup('maven.modrinth') }
+    }
+    // local mods dropped into libs/ (e.g. the journeymap 1.20.1 backport jar - see phase 3)
+    flatDir {
+        dirs "${rootDir}/libs"
+    }
+}
+
+dependencies {
+    implementation group: 'com.google.code.findbugs', name: 'jsr305', version: '3.0.1'
+    implementation group: 'org.jetbrains', name: 'annotations', version: '23.0.0'
+
+    // The journeymap 1.20.1 mod itself (journeymap.client.* internals webmap serves over HTTP). Every
+    // module compiles common's source, so it is needed on all compile classpaths. compileOnly: provided
+    // by the installed journeymap at runtime, never bundled. journeymap's own API names are loader-neutral
+    // so a single (forge) cursemaven artifact resolves compile symbols for all three modules without remap.
+    compileOnly "curse.maven:journeymap-32274:${journeymap_forge_version}"
+
+    // Compile access to the bundled libraries on EVERY module (loaders do not inherit common's
+    // implementation deps through the compileOnly project(':common') seam - each applies this convention
+    // and so gets them directly). Actual BUNDLING is added per loader: fabric loom `include`, forge
+    // `shade` + relocate. The web frontend (webmap-client) and Javalin (+kotlin-stdlib, since Javalin is
+    // Kotlin) are the payload; slf4j is pinned so Javalin/Jetty's logging resolves consistently.
+    implementation group: 'info.journeymap', name: 'webmap-client', version: project.journeymap_webmap_version, changing: true
+    implementation group: 'io.javalin', name: 'javalin', version: project.javalin_version
+    implementation group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib', version: '2.1.20'
+    implementation enforcedPlatform('org.slf4j:slf4j-api:2.0.16')
+}
+
+jar {
+    dependsOn 'processDocs'
+    manifest {
+        attributes([
+                'Specification-Title'     : project.name,
+                'Specification-Vendor'    : project.group_id,
+                'Specification-Version'   : '1',
+                'Implementation-Title'    : project.name,
+                'Implementation-Version'  : "${version}",
+                'Implementation-Vendor'   : project.group_id,
+                'Implementation-URL'      : 'http://journeymap.info',
+                'Implementation-Timestamp': getDate()
+        ])
+    }
+}
+
+tasks.register('processDocs', Copy) {
+    def loader
+    def loaderVersion
+    if ('fabric'.equalsIgnoreCase(project.name)) {
+        loaderVersion = fabric_api_version
+        loader = 'Fabric'
+    } else if ('forge'.equalsIgnoreCase(project.name)) {
+        loaderVersion = forge_version
+        loader = 'Forge'
+    } else {
+        loaderVersion = '1.0.0'
+        loader = 'Common'
+    }
+    from(file("$rootDir/doc/")) {
+        include '*.html'
+        expand 'version': project.mod_version,
+                'date': getDate(),
+                'mcversion': project.minecraft_version,
+                'loaderversion': loaderVersion,
+                'loadername': loader
+    }
+    into "${layout.buildDirectory.get()}/doc"
+}
+
+processResources {
+    // Resource placeholders used by the manifests: mods.toml (${modVersion}, ${date}) and
+    // fabric.mod.json (${version}); pack.mcmeta has none. All version placeholders resolve to the
+    // bare mod version (not the mc-prefixed gradle version).
+    var expandProps = [
+            version   : project.mod_version,
+            modVersion: project.mod_version,
+            date      : getDate()
+    ]
+    filesMatching(['META-INF/mods.toml', 'fabric.mod.json']) {
+        expand expandProps
+    }
+    inputs.properties(expandProps)
+}
+
+def getDate() {
+    def date = new Date()
+    return date.format(project.dateFormat)
+}

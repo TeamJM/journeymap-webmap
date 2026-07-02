@@ -1,0 +1,32 @@
+plugins {
+    id 'multiloader-common'
+}
+
+configurations {
+    commonJava {
+        canBeResolved = true
+    }
+    commonResources {
+        canBeResolved = true
+    }
+}
+
+dependencies {
+    // IDE-only hint so IntelliJ resolves common's classes from the loader modules. The loaders compile
+    // common's SOURCE directly (below), so this is not needed to BUILD; it is compileOnly so it is not
+    // bundled and creates no duplicate classes. Matches journeymap-1.20.1.
+    compileOnly(project(':common'))
+
+    commonJava project(path: ':common', configuration: 'commonJava')
+    commonResources project(path: ':common', configuration: 'commonResources')
+}
+
+tasks.named('compileJava', JavaCompile) {
+    dependsOn(configurations.commonJava)
+    source(configurations.commonJava)
+}
+
+processResources {
+    dependsOn(configurations.commonResources)
+    from(configurations.commonResources)
+}

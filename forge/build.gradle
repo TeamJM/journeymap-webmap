@@ -4,9 +4,6 @@ plugins {
     id 'multiloader-loader'
     id 'net.minecraftforge.gradle' version '[7.0.2,8.0)'
     id 'com.gradleup.shadow' version '9.0.0'
-    // Reobfuscates the shipped jar (classes) to SRG names - required for Forge 1.20.1's SRG runtime.
-    // FG7 compiles webmap against MOJMAP; the installed forge maps net.minecraft.* members to SRG at runtime.
-    id 'net.minecraftforge.renamer' version '1.1.0'
     id 'net.darkhax.curseforgegradle' version '1.1.+'
     id 'com.modrinth.minotaur' version '2.+'
     id 'maven-publish'
@@ -14,7 +11,12 @@ plugins {
 
 def loaderName = 'forge'
 
+// Configurations for the SRG-period <-> modern-mojmap remap (see the remap block below): fart runs
+// ForgeAutoRenamingTool (remaps the forge userdev jar and reobfs the shipped jar) and mcpConfig supplies
+// joined.tsrg. shade holds the libs bundled into the mod jar via shadowJar.
 configurations {
+    fart          // ForgeAutoRenamingTool (fat jar)
+    mcpConfig     // mcp_config zip - config/joined.tsrg (obf -> srg)
     shade
 }
 
@@ -35,20 +37,38 @@ dependencies {
     implementation minecraft.dependency("net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}")
     implementation("net.sf.jopt-simple:jopt-simple:5.0.4") { version { strictly "5.0.4" } }
 
-    // The forge variant of the public API. Provided by the installed journeymap at runtime; not bundled.
-    compileOnly group: 'info.journeymap', name: 'journeymap-api-forge', version: project.journeymap_api_version, changing: true
+    // The public JourneyMap API (COMMON/mojmap variant, matching :common). The forge variant is compiled
+    // against forge's MCP (old-package) MC and exposes old-package types in its MC-touching signatures
+    // (e.g. MapPolygon.getPoints() -> List<net.minecraft.util.math.BlockPos>), which no longer resolve
+    // against the now-mojmap compile classpath produced by the remap below (Polygons.java iterates those
+    // points as modern net.minecraft.core.BlockPos). The common variant carries modern-mojmap signatures.
+    // compileOnly - provided by the installed journeymap at runtime; not bundled. The ART reobf converts
+    // webmap's own modern MC references back to SRG for the forge runtime.
+    compileOnly group: 'info.journeymap', name: 'journeymap-api-common', version: project.journeymap_api_version, changing: true
 
     // The JourneyMap mod internals (journeymap.client.* / journeymap.common.*) webmap serves over HTTP.
-    // Forge (milestone B) uses the MCP-mapped forge cursemaven jar - its JM signatures reference MCP
-    // Minecraft types matching FG7's MCP runtime. compileOnly - provided by the installed journeymap.
-    compileOnly "curse.maven:journeymap-32274:${journeymap_forge_version}"
+    // :forge (milestone B) compiles :common's MODERN-mojmap source against the ART-remapped (srg-period ->
+    // modern) forge userdev jar built below, so it consumes the SAME mojmap-remapped JM jar that :common
+    // and :fabric use (the MCP forge cursemaven jar exposes MCP-packaged Minecraft types in its JM
+    // signatures that would NOT resolve against that mojmap classpath). Plain compileOnly file (already
+    // mojmap, no re-remap) - provided by the installed journeymap at runtime, never bundled.
+    compileOnly files(rootProject.journeymapMojmapJar) { builtBy rootProject.tasks.named('remapJourneymapToMojmap') }
 
     // Bundled payload (shadowJar over the `shade` config). shade resolves transitively, so `shade javalin`
     // pulls the jetty stack + kotlin-stdlib into the fat jar; the relocations below move them out of the
     // way. Compile access comes from the convention's `implementation` deps.
     shade group: 'info.journeymap', name: 'webmap-client', version: project.journeymap_webmap_version, changing: true
     shade group: 'io.javalin', name: 'javalin', version: project.javalin_version
-    shade group: 'org.slf4j', name: 'slf4j-simple', version: '2.0.16'
+    // javalin 4.6.8 pulls slf4j-api 1.7.x transitively; pin it to 1.8.0-beta4 to match the provider below
+    // (slf4j 1.8.x is ServiceLoader/provider-based). Newest-wins resolution overrides javalin's 1.7.x.
+    shade group: 'org.slf4j', name: 'slf4j-api', version: '1.8.0-beta4'
+    // slf4j binding. NOT transitive from javalin, so declared explicitly (same as :fabric and legacy).
+    shade group: 'org.slf4j', name: 'slf4j-simple', version: '1.8.0-beta4'
+
+    // Toolchain for the srg-period <-> modern-mojmap remap block below: ForgeAutoRenamingTool (ART) does
+    // both the userdev-jar remap and the shipped-jar reobf; mcp_config yields config/joined.tsrg (obf->srg).
+    fart "net.minecraftforge:ForgeAutoRenamingTool:1.0.2:all"
+    mcpConfig "de.oceanlabs.mcp:mcp_config:${mcp_config_version}@zip"
 }
 
 minecraft {
@@ -70,49 +90,211 @@ minecraft {
     }
 }
 
-// Reobfuscate the shipped fat (shadow) jar to SRG names for Forge 1.20.1's SRG runtime. FG7 compiles
-// webmap's net.minecraft.* references as MOJMAP; the runtime resolves them as SRG. Only webmap's own
-// classes carry MC references - the shaded (relocated) libraries have none, so they pass through untouched.
-// NOTE: must come AFTER the dependencies block - minecraft.dependency.toSrgFile requires
-// minecraft.dependency(...) to be declared first, else FG7 fails config with "Mavenizer instance not found".
-renamer.mappings.from minecraft.dependency.toSrgFile
+// =====================================================================================================
+// Forge SRG-period <-> modern-mojmap mappings (1.16.5). The FG7 forge userdev jar is SRG-period named
+// (net.minecraft.util.ResourceLocation, net.minecraft.util.math.ChunkPos, ...), but :common's source
+// (compiled into :forge) is minivan-mapped to the MODERN mojmap packages (net.minecraft.resources.
+// ResourceLocation, net.minecraft.world.level.ChunkPos, ...). We (1) ART-remap the forge userdev jar
+// srg-period -> modern and prepend it to the compile classpath so :common's mojmap source resolves, and
+// (2) compose a modern-mojmap -> srg-runtime mapping (srgutils, from the buildSrc classpath) and reobf the
+// shipped shadowJar back to SRG with ForgeAutoRenamingTool for Forge 1.16.5's SRG runtime.
+// =====================================================================================================
+def mojmapDir = layout.buildDirectory.dir("mojmap")
+def joinedTsrgFile = mojmapDir.map { it.file("joined.tsrg") }
+def clientMappingsFile = mojmapDir.map { it.file("client.txt") }
+def srg2mojFile = mojmapDir.map { it.file("srg2mojmap.srg") }
+def modern2srgFile = mojmapDir.map { it.file("modern2srg.tsrg") }
+def remappedForgeJar = mojmapDir.map { it.file("forge-${minecraft_version}-${forge_version}-mojmap.jar") }
+// Scratch output for the ART reobf, moved over shadowJar's own archiveFile once written.
+def artReobfTmpJar = mojmapDir.map { it.file("shadowJar-art-reobf.tmp.jar") }
 
-// Reobf the shadowJar IN PLACE (overwrite its own output) so the distributable keeps the clean released
-// name. renamer.classes() auto-seeds its single map from the global renamer.mappings (toSrgFile above).
-def reobfJar = renamer.classes(tasks.named('shadowJar')) {
-    accessTransformers = false
-    output = tasks.named('shadowJar').flatMap { it.archiveFile }
+def extractJoinedTsrg = tasks.register('extractJoinedTsrg', Copy) {
+    from({ zipTree(configurations.mcpConfig.singleFile) }) {
+        include 'config/joined.tsrg'
+        eachFile { it.path = it.name }
+    }
+    includeEmptyDirs = false
+    into mojmapDir
 }
 
-// Shadow re-asserts `Multi-Release: true` in the manifest regardless of the shadowJar manifest block, and
-// the reobf drops the versioned overlay - so strip the attribute from the finished jar here, after reobf
-// has written it, to avoid securejarhandler's `NoSuchFileException: /META-INF/versions` at mod discovery.
-reobfJar.configure {
+def downloadClientMappings = tasks.register('downloadClientMappings') {
+    inputs.property('url', project.mojang_client_mappings_url)
+    inputs.property('sha1', project.mojang_client_mappings_sha1)
+    outputs.file clientMappingsFile
     doLast {
-        def jarPath = tasks.named('shadowJar').get().archiveFile.get().asFile.toPath()
-        def uri = java.net.URI.create("jar:" + jarPath.toUri())
+        def out = clientMappingsFile.get().asFile
+        out.parentFile.mkdirs()
+        new URL(project.mojang_client_mappings_url).withInputStream { i -> out.withOutputStream { o -> o << i } }
+        def sha1 = java.security.MessageDigest.getInstance('SHA-1').digest(out.bytes).encodeHex().toString()
+        if (sha1 != project.mojang_client_mappings_sha1)
+        {
+            throw new GradleException("client mappings sha1 mismatch: expected ${project.mojang_client_mappings_sha1} got ${sha1}")
+        }
+    }
+}
+
+// Class-only srg-period -> modern map for the forge userdev jar ART remap (members are already official
+// on 1.16.5, so only class packages differ). obf2srg comes from joined.tsrg; obf2moj from Mojang's
+// client.txt; the srg->modern class map is (srg <- obf -> modern) for every class whose srg != modern.
+def buildForgeRemapMaps = tasks.register('buildForgeRemapMaps') {
+    dependsOn extractJoinedTsrg, downloadClientMappings
+    inputs.file joinedTsrgFile
+    inputs.file clientMappingsFile
+    outputs.file srg2mojFile
+    doLast {
+        def obf2srg = [:]
+        joinedTsrgFile.get().asFile.eachLine { line ->
+            if (line && !Character.isWhitespace(line.charAt(0) as char))
+            {
+                def p = line.trim().split(' ')
+                if (p.length == 2)
+                {
+                    obf2srg[p[0]] = p[1]
+                }
+            }
+        }
+        def obf2moj = [:]
+        clientMappingsFile.get().asFile.eachLine { line ->
+            if (line && !Character.isWhitespace(line.charAt(0) as char) && !line.startsWith('#') && line.endsWith(':') && line.contains(' -> '))
+            {
+                def parts = line.split(' -> ')
+                obf2moj[parts[1].trim()[0..-2].replace('.', '/')] = parts[0].trim().replace('.', '/')
+            }
+        }
+        def fwd = []
+        obf2srg.each { obf, srg ->
+            def moj = obf2moj[obf]
+            if (moj != null && srg != moj)
+            {
+                fwd << "CL: ${srg} ${moj}".toString()
+            }
+        }
+        fwd.sort()
+        srg2mojFile.get().asFile.parentFile.mkdirs()
+        srg2mojFile.get().asFile.text = fwd.join('\n') + '\n'
+        logger.lifecycle("buildForgeRemapMaps: ${fwd.size()} class remaps")
+    }
+}
+
+// Full modern-mojmap -> srg-runtime mapping (classes + members + descriptors) via srgutils, for the ART
+// reobf of the shipped jar. modern->srg = (obf->modern).reverse() chained with (obf->srg).
+def buildModern2Srg = tasks.register('buildModern2Srg') {
+    dependsOn extractJoinedTsrg, downloadClientMappings
+    inputs.file joinedTsrgFile
+    inputs.file clientMappingsFile
+    outputs.file modern2srgFile
+    doLast {
+        def mf = net.minecraftforge.srgutils.IMappingFile
+        def obf2srg = mf.load(joinedTsrgFile.get().asFile)          // obf -> srg
+        def pg = mf.load(clientMappingsFile.get().asFile)           // srgutils loads proguard as modern -> obf
+        def modern2srg = pg.chain(obf2srg)                          // modern -> obf -> srg
+        modern2srgFile.get().asFile.parentFile.mkdirs()
+        modern2srg.write(modern2srgFile.get().asFile.toPath(),
+                net.minecraftforge.srgutils.IMappingFile.Format.TSRG2, false)
+        logger.lifecycle("buildModern2Srg: wrote ${modern2srgFile.get().asFile.name}")
+    }
+}
+
+// ART-remap the forge userdev MC jar srg-period -> modern-mojmap and prepend it to the compile classpath,
+// so :common's modern-mojmap source resolves against the modern net.minecraft.* packages.
+def remapForgeToMojmap = tasks.register('remapForgeToMojmap', JavaExec) {
+    dependsOn buildForgeRemapMaps
+    inputs.file srg2mojFile
+    outputs.file remappedForgeJar
+    classpath = configurations.fart
+    mainClass = 'net.minecraftforge.fart.Main'
+    doFirst {
+        def forgeJar = configurations.compileClasspath.files.find {
+            it.name == "forge-${minecraft_version}-${forge_version}.jar"
+        }
+        if (forgeJar == null)
+        {
+            throw new GradleException("forge userdev jar (forge-${minecraft_version}-${forge_version}.jar) not found on compileClasspath")
+        }
+        remappedForgeJar.get().asFile.parentFile.mkdirs()
+        args '--input', forgeJar.absolutePath,
+                '--output', remappedForgeJar.get().asFile.absolutePath,
+                '--map', srg2mojFile.get().asFile.absolutePath
+    }
+}
+
+tasks.named('compileJava', JavaCompile) {
+    dependsOn remapForgeToMojmap
+    classpath = files(remappedForgeJar) + classpath
+}
+
+// Reobfuscate the shipped fat (shadow) jar modern-mojmap -> SRG for Forge 1.16.5's SRG runtime with
+// ForgeAutoRenamingTool (ART). Only webmap's own journeymap_webmap.* classes carry MC references; the
+// relocated shaded libs (javalin/jetty/kotlin/slf4j/servlet) reference no MC types, so they pass through
+// untouched. ART maps each member's name and descriptor atomically (standard ASM Remapper); this is why
+// ART is used instead of net.minecraftforge.renamer's class pass, whose descriptor-first reobf is buggy on
+// 1.16.5 - it leaves descriptor-renamed vanilla members (getResourceManager, level, getWorldPath, ...)
+// mojmap-named -> NoSuchMethodError at the SRG runtime. Reobf IN PLACE (move the output over shadowJar's
+// own archiveFile) so the distributable keeps the clean released name. --lib gives ART the full class
+// hierarchy in the MODERN namespace so it can resolve INHERITED members: the modern-remapped forge MC jar
+// PLUS every compile dependency EXCEPT the raw SRG-period forge userdev jar (whose SRG-named MC classes
+// would otherwise shadow the modern ones).
+def artReobfJar = tasks.register('artReobfJar', JavaExec) {
+    dependsOn tasks.named('shadowJar'), remapForgeToMojmap, buildModern2Srg
+    inputs.file modern2srgFile
+    inputs.file remappedForgeJar
+    classpath = configurations.fart
+    mainClass = 'net.minecraftforge.fart.Main'
+    doFirst {
+        def jarFile = tasks.named('shadowJar').flatMap { it.archiveFile }.get().asFile
+        def outFile = artReobfTmpJar.get().asFile
+        outFile.parentFile.mkdirs()
+        def srgForgeName = "forge-${minecraft_version}-${forge_version}.jar".toString()
+        def argList = ['--input', jarFile.absolutePath,
+                       '--output', outFile.absolutePath,
+                       '--map', modern2srgFile.get().asFile.absolutePath,
+                       '--lib', remappedForgeJar.get().asFile.absolutePath]
+        configurations.compileClasspath.files.each { f ->
+            if (f.name != srgForgeName)
+            {
+                argList << '--lib' << f.absolutePath
+            }
+        }
+        args argList
+    }
+    doLast {
+        def jarFile = tasks.named('shadowJar').flatMap { it.archiveFile }.get().asFile
+        java.nio.file.Files.move(artReobfTmpJar.get().asFile.toPath(), jarFile.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        // Shadow re-asserts `Multi-Release: true` in the manifest, but the reobf drops the versioned
+        // overlay (excluded from shadowJar below) - so strip the attribute from the finished jar here,
+        // after the reobf move, to avoid securejarhandler's `NoSuchFileException: /META-INF/versions` at
+        // mod discovery.
+        def uri = java.net.URI.create("jar:" + jarFile.toURI())
         java.nio.file.FileSystems.newFileSystem(uri, [:]).withCloseable { fs ->
             def mf = fs.getPath("META-INF/MANIFEST.MF")
             def kept = java.nio.file.Files.readAllLines(mf).findAll { !it.toLowerCase().startsWith("multi-release") }
             java.nio.file.Files.write(mf, kept)
         }
+        logger.lifecycle("artReobfJar: ART-reobf'd modern-mojmap -> SRG in place: ${jarFile.name}")
     }
 }
 
 tasks.named('shadowJar').configure {
-    finalizedBy reobfJar
+    finalizedBy artReobfJar
 }
 
 // The reobf overwrites the shadowJar output in place, so upload/publish tasks reading it must run after.
 tasks.matching { it.name.startsWith('publish') || it.name.startsWith('modrinth') || it.name.startsWith('curseforge') }.configureEach {
-    mustRunAfter reobfJar
+    mustRunAfter artReobfJar
 }
 
 shadowJar {
     archiveFileName.set("${archiveBaseName.get()}-${archiveVersion.get()}.${archiveExtension.get()}")
     configurations = [project.configurations.shade]
     archiveClassifier.set("")
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    // Deduplicate colliding non-class resources (first wins) so the ART reobf above - ForgeAutoRenamingTool
+    // rejects an input jar with duplicate entries - gets a clean jar. The shaded jetty stack + javalin ship
+    // multiple copies of META-INF/LICENSE, META-INF/NOTICE.txt and about.html, plus two different
+    // org/eclipse/jetty/http/encoding.properties (javalin overrides jetty's charset defaults); INCLUDE kept
+    // every copy. Relocations already prevent any class-path collision, so only these metadata/resource
+    // files are affected and keeping the first of each is correct.
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     // Some shaded libs (jetty, kotlin-stdlib, slf4j) are multi-release jars. Shadow merges their
     // `Multi-Release: true` manifest attr into the fat jar and re-asserts it over any manifest block, but
     // the SRG reobf step below drops the META-INF/versions/ overlay - leaving a manifest that claims MR
@@ -126,11 +308,12 @@ shadowJar {
         exclude("META-INF/services/jakarta.*")
         exclude(dependency("org.ow2.asm:.*:.*"))
     }
-    minimize {
-        // API/frontend have utility classes reached only reflectively; keep them.
-        exclude(dependency("info.journeymap:.*:.*"))
-        exclude(dependency("org.slf4j:.*:.*"))
-    }
+    // NO minimize: javalin/jetty load many classes reflectively/by-name (Javalin 4 eagerly instantiates
+    // org.eclipse.jetty.websocket.server.WebSocketServerFactory on start, plus jetty resolves connection
+    // factories, the slf4j provider, etc. via ServiceLoader/reflection). Shadow's minimize sees no static
+    // reference to those and prunes them, so the server threw "Unable to load WebSocketServerFactory" and
+    // failed to bind (silently - initialise() catches it). Ship the shaded libs whole, same as :fabric's
+    // loom `include` bundles them.
     relocate "kotlin", "info.journeymap.shaded.kotlin.kotlin"
     relocate "jakarta", "info.journeymap.shaded.jakarta"
     relocate "javax.servlet", "info.journeymap.shaded.org.javax.servlet"

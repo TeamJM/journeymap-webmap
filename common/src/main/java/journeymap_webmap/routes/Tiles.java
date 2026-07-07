@@ -94,11 +94,11 @@ public class Tiles
         if (mapTypeName == MapType.Name.underground && WorldData.isHardcoreAndMultiplayer())
         {
             WebMap.logger.debug("Blank tile returned for underground view on a hardcore server");
-            OutputStream output = ctx.outputStream();
 
             ctx.contentType(ContentType.IMAGE_PNG);
             try
             {
+                OutputStream output = ctx.res.getOutputStream();
                 output.write(Files.readAllBytes(RegionImageHandler.getBlank512x512ImageFile().toPath()));
                 output.flush();
             }
@@ -128,10 +128,9 @@ public class Tiles
                 RegionTile.TILE_SIZE, RegionTile.TILE_SIZE, false, showGrid
         );
 
-        OutputStream output = ctx.outputStream();
-
         try
         {
+            OutputStream output = ctx.res.getOutputStream();
             ctx.contentType(ContentType.IMAGE_PNG);
             output.write(img.asByteArray());
             output.flush();

@@ -83,11 +83,13 @@ dependencies {
     implementation group: 'com.google.code.findbugs', name: 'jsr305', version: '3.0.1'
     implementation group: 'org.jetbrains', name: 'annotations', version: '23.0.0'
 
-    // The journeymap 1.20.1 mod itself (journeymap.client.* internals webmap serves over HTTP). Every
-    // module compiles common's source, so it is needed on all compile classpaths. compileOnly: provided
-    // by the installed journeymap at runtime, never bundled. journeymap's own API names are loader-neutral
-    // so a single (forge) cursemaven artifact resolves compile symbols for all three modules without remap.
-    compileOnly "curse.maven:journeymap-32274:${journeymap_forge_version}"
+    // The JourneyMap mod internals (journeymap.client.* / journeymap.common.* that webmap serves over
+    // HTTP) are supplied PER-MODULE, not here: :common and :fabric need a mojmap-mapped JM jar (see
+    // rootProject's remapJourneymapToMojmap task) while :forge needs the MCP-mapped forge cursemaven jar.
+    // A single uniform artifact cannot satisfy both - the forge/MCP jar's JM method signatures expose
+    // MCP-packaged Minecraft types (net.minecraft.util.math.BlockPos, RegistryKey, ResourceLocation) that
+    // do not resolve on webmap's mojmap classpath (:common minivan, :fabric loom). compileOnly in every
+    // case - provided by the installed journeymap at runtime, never bundled.
 
     // Compile access to the bundled libraries on EVERY module (loaders do not inherit common's
     // implementation deps through the compileOnly project(':common') seam - each applies this convention

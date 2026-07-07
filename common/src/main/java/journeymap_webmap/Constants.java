@@ -12,6 +12,6 @@ public interface Constants
 
     static InputStream getResourceAsStream(ResourceLocation resourceLocation) throws IOException
     {
-        return Minecraft.getInstance().getResourceManager().open(resourceLocation);
+        return Minecraft.getInstance().getResourceManager().getResource(resourceLocation).getInputStream();
     }
 }

@@ -85,8 +85,8 @@ public class Resources
         {
             try
             {
-                ctx.outputStream().write(img.asByteArray());
-                ctx.outputStream().flush();
+                ctx.res.getOutputStream().write(img.asByteArray());
+                ctx.res.getOutputStream().flush();
             }
             catch (Exception e)
             {

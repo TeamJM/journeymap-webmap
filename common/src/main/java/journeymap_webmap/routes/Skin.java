@@ -33,8 +33,8 @@ public class Skin
             try
             {
                 ctx.contentType(ContentType.IMAGE_PNG);
-                ctx.outputStream().write(img.asByteArray());
-                ctx.outputStream().flush();
+                ctx.res.getOutputStream().write(img.asByteArray());
+                ctx.res.getOutputStream().flush();
                 if (close)
                 {
                     img.close();

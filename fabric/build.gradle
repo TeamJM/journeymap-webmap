@@ -8,6 +8,18 @@ plugins {
 
 def loaderName = 'fabric'
 
+// The convention (multiloader-common) sets a real JDK-8 toolchain, but :fabric compiles common's source,
+// which imports javalin/jetty - libraries published as Java-11 bytecode (class version 55) that a JDK-8
+// javac's ClassReader hard-rejects ("class file has wrong version 55.0, should be 52.0"). Compile with a
+// modern javac under --release 8 instead (identical to :common): a JDK-21 javac reads the newer library
+// class files while ct.sym still enforces the exact Java-8 platform API at compile time.
+tasks.withType(JavaCompile).configureEach {
+    javaCompiler = javaToolchains.compilerFor {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    options.release = 8
+}
+
 loom {
     runs {
         client {
@@ -37,22 +49,43 @@ dependencies {
     // The fabric variant of the public API (loom remaps intermediary -> named). Not bundled.
     modCompileOnly group: 'info.journeymap', name: 'journeymap-api-fabric', version: project.journeymap_api_version, changing: true
 
+    // The JourneyMap mod internals (journeymap.client.* / journeymap.common.*) webmap serves over HTTP,
+    // pre-remapped intermediary -> mojmap (see rootProject's remapJourneymapToMojmap). Plain compileOnly
+    // (not modCompileOnly): the jar is already mojmap, so loom must not re-remap it. Provided by the
+    // installed journeymap at runtime, never bundled.
+    compileOnly files(rootProject.journeymapMojmapJar) { builtBy rootProject.tasks.named('remapJourneymapToMojmap') }
+
     // Bundled payload (loom Jar-in-Jar). Compile access to these comes from the convention's
     // `implementation` deps (javalin drags the jetty stack onto the compile classpath transitively);
     // loom `include` is non-transitive, so every jar to ship is listed here explicitly.
     include group: 'info.journeymap', name: 'webmap-client', version: project.journeymap_webmap_version, changing: true
     include group: 'io.javalin', name: 'javalin', version: project.javalin_version
-    include group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib', version: '2.1.20'
-    include group: 'org.eclipse.jetty', name: 'jetty-server', version: '11.0.20'
-    include group: 'org.eclipse.jetty', name: 'jetty-servlet', version: '11.0.20'
-    include group: 'org.eclipse.jetty', name: 'jetty-webapp', version: '11.0.20'
-    include group: 'org.eclipse.jetty', name: 'jetty-security', version: '11.0.20'
-    include group: 'org.eclipse.jetty', name: 'jetty-io', version: '11.0.20'
-    include group: 'org.eclipse.jetty', name: 'jetty-http', version: '11.0.20'
-    include group: 'org.eclipse.jetty', name: 'jetty-util', version: '11.0.20'
-    include group: 'org.eclipse.jetty', name: 'jetty-xml', version: '11.0.20'
-    include group: 'jakarta.servlet', name: 'jakarta.servlet-api', version: '6.1.0'
-    include group: 'org.eclipse.jetty.toolchain', name: 'jetty-jakarta-servlet-api', version: '5.0.2'
+    include group: 'javax.servlet', name: 'javax.servlet-api', version: '4.0.1'
+    include group: 'org.eclipse.jetty', name: 'jetty-server', version: '9.4.51.v20230217'
+    include group: 'org.eclipse.jetty', name: 'jetty-webapp', version: '9.4.51.v20230217'
+    include group: 'org.eclipse.jetty', name: 'jetty-servlet', version: '9.4.51.v20230217'
+    include group: 'org.eclipse.jetty', name: 'jetty-security', version: '9.4.51.v20230217'
+    include group: 'org.eclipse.jetty', name: 'jetty-http', version: '9.4.51.v20230217'
+    include group: 'org.eclipse.jetty', name: 'jetty-io', version: '9.4.51.v20230217'
+    include group: 'org.eclipse.jetty', name: 'jetty-util', version: '9.4.51.v20230217'
+    include group: 'org.eclipse.jetty', name: 'jetty-util-ajax', version: '9.4.51.v20230217'
+    include group: 'org.eclipse.jetty', name: 'jetty-xml', version: '9.4.51.v20230217'
+    include group: 'org.eclipse.jetty', name: 'jetty-client', version: '9.4.51.v20230217'
+    include group: 'org.eclipse.jetty.websocket', name: 'websocket-api', version: '9.4.51.v20230217'
+    include group: 'org.eclipse.jetty.websocket', name: 'websocket-common', version: '9.4.51.v20230217'
+    include group: 'org.eclipse.jetty.websocket', name: 'websocket-client', version: '9.4.51.v20230217'
+    include group: 'org.eclipse.jetty.websocket', name: 'websocket-server', version: '9.4.51.v20230217'
+    include group: 'org.eclipse.jetty.websocket', name: 'websocket-servlet', version: '9.4.51.v20230217'
+    include group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib', version: '1.5.32'
+    include group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib-common', version: '1.5.32'
+    include group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib-jdk7', version: '1.5.32'
+    include group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib-jdk8', version: '1.5.32'
+    include group: 'org.jetbrains', name: 'annotations', version: '13.0'
+    include group: 'org.slf4j', name: 'slf4j-api', version: '1.8.0-beta4'
+    // slf4j 1.8.x is provider-based (ServiceLoader). javalin needs a binding, not just the api, or it
+    // logs a "Missing dependency 'Slf4j simple with Provider'" banner and falls back to NOP. slf4j-simple
+    // is the matching 1.8.0-beta4 provider (matches journeymap-legacy's proven Java-8 webmap setup).
+    include group: 'org.slf4j', name: 'slf4j-simple', version: '1.8.0-beta4'
 }
 
 remapJar {

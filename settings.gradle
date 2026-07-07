@@ -5,6 +5,11 @@ pluginManagement {
         maven {
             url "https://plugins.gradle.org/m2/"
         }
+        maven {
+            // minivan (agency.highlysuspect.minivan) - vanilla mojmap toolchain for :common on pre-1.17
+            name = 'SleepingTown'
+            url = uri('https://repo.sleeping.town/')
+        }
         exclusiveContent {
             forRepository {
                 maven {

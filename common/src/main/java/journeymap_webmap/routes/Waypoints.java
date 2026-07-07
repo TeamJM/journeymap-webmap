@@ -1,8 +1,10 @@
 package journeymap_webmap.routes;
 
+import com.mojang.blaze3d.platform.NativeImage;
 import io.javalin.http.ContentType;
 import io.javalin.http.Context;
 import journeymap.client.texture.TextureCache;
+import net.minecraft.client.renderer.texture.DynamicTexture;
 
 import java.io.IOException;
 
@@ -12,18 +14,18 @@ public class Waypoints
     {
         String id = ctx.pathParam("id");
 
-        var img = TextureCache.getColorizedWaypointIcon(id);
+        DynamicTexture img = TextureCache.getColorizedWaypointIcon(id);
 
         if (img != null)
         {
-            var nativeImage = img.getPixels();
+            NativeImage nativeImage = img.getPixels();
             if (nativeImage != null)
             {
                 try
                 {
                     ctx.contentType(ContentType.IMAGE_PNG);
-                    ctx.outputStream().write(nativeImage.asByteArray());
-                    ctx.outputStream().flush();
+                    ctx.res.getOutputStream().write(nativeImage.asByteArray());
+                    ctx.res.getOutputStream().flush();
                 }
                 catch (IOException e)
                 {

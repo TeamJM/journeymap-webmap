@@ -1,3 +1,15 @@
 plugins {
     id 'groovy-gradle-plugin'
+    id 'java'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // ASM is used by MinivanAttrStripper to remove the malformed MethodParameters /
+    // Runtime*ParameterAnnotations attributes that minivan's remap leaves on the mojmap Minecraft jar
+    // (they crash javac's ClassReader - see common/build.gradle).
+    implementation 'org.ow2.asm:asm:9.6'
 }

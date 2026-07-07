@@ -38,6 +38,11 @@ dependencies {
     // The forge variant of the public API. Provided by the installed journeymap at runtime; not bundled.
     compileOnly group: 'info.journeymap', name: 'journeymap-api-forge', version: project.journeymap_api_version, changing: true
 
+    // The JourneyMap mod internals (journeymap.client.* / journeymap.common.*) webmap serves over HTTP.
+    // Forge (milestone B) uses the MCP-mapped forge cursemaven jar - its JM signatures reference MCP
+    // Minecraft types matching FG7's MCP runtime. compileOnly - provided by the installed journeymap.
+    compileOnly "curse.maven:journeymap-32274:${journeymap_forge_version}"
+
     // Bundled payload (shadowJar over the `shade` config). shade resolves transitively, so `shade javalin`
     // pulls the jetty stack + kotlin-stdlib into the fat jar; the relocations below move them out of the
     // way. Compile access comes from the convention's `implementation` deps.

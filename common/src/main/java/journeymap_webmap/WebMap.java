@@ -62,7 +62,7 @@ public class WebMap
                         if (assetsRootProperty != null)
                         {
                             logger.info("Detected 'journeymap.webmap.assets_root' property, serving static files from: " + assetsRootProperty);
-                            config.staticFiles.add(assetsRootProperty, Location.EXTERNAL);
+                            config.addStaticFiles(assetsRootProperty, Location.EXTERNAL);
                         }
                         else if (testFile.exists())
                         {
@@ -70,7 +70,7 @@ public class WebMap
                             {
                                 String assets = testFile.getCanonicalPath();
                                 logger.info("Development environment detected, serving static files from the filesystem.: " + assets);
-                                config.staticFiles.add(testFile.getCanonicalPath(), Location.EXTERNAL);
+                                config.addStaticFiles(testFile.getCanonicalPath(), Location.EXTERNAL);
                             }
                             catch (IOException e)
                             {
@@ -94,12 +94,12 @@ public class WebMap
                             if (dir.exists())
                             {
                                 logger.info("Loading web content from local: {}", dir.getPath());
-                                config.staticFiles.add(dir.getPath(), Location.EXTERNAL);
+                                config.addStaticFiles(dir.getPath(), Location.EXTERNAL);
                             }
                             else
                             {
                                 logger.info("Loading web content from jar: {}", FileHandler.ASSETS_WEBMAP);
-                                config.staticFiles.add(FileHandler.ASSETS_WEBMAP, Location.CLASSPATH);
+                                config.addStaticFiles(FileHandler.ASSETS_WEBMAP, Location.CLASSPATH);
                             }
                         }
                     })
@@ -147,7 +147,7 @@ public class WebMap
             }
             else
             {
-                var configuredPort = (String) JourneymapClient.getInstance().getWebMapProperties().port.get();
+                String configuredPort = (String) JourneymapClient.getInstance().getWebMapProperties().port.get();
                 if (configuredPort == null)
                 {
                     port = 0;

@@ -18,9 +18,9 @@ public class Log
         {
             try
             {
-                ctx.res().addHeader("Content-Disposition", "inline; filename=\"journeymap.log\"");
-                ctx.res().getOutputStream().write(Files.readAllBytes(file.toPath()));
-                ctx.res().getOutputStream().flush();
+                ctx.res.addHeader("Content-Disposition", "inline; filename=\"journeymap.log\"");
+                ctx.res.getOutputStream().write(Files.readAllBytes(file.toPath()));
+                ctx.res.getOutputStream().flush();
             }
             catch (IOException e)
             {

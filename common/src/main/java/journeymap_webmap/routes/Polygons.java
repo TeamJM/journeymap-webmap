@@ -48,8 +48,9 @@ public class Polygons
 
         for (OverlayDrawStep overlayDrawStep : steps)
         {
-            if (overlayDrawStep instanceof DrawPolygonStep step)
+            if (overlayDrawStep instanceof DrawPolygonStep)
             {
+                DrawPolygonStep step = (DrawPolygonStep) overlayDrawStep;
                 PolygonOverlay polygon = step.getOverlay();
                 List<Map<String, Integer>> points = new ArrayList<>();
                 String label = polygon.getLabel();
@@ -57,7 +58,7 @@ public class Polygons
 
                 for (BlockPos point : polygon.getOuterArea().getPoints())
                 {
-                    points.add(new HashMap<>()
+                    points.add(new HashMap<String, Integer>()
                     {{
                         put("x", point.getX());
                         put("y", point.getY());
@@ -74,7 +75,7 @@ public class Polygons
                         List<Map<String, Integer>> holePoints = new ArrayList<>();
                         for (BlockPos holePoint : hole.getPoints())
                         {
-                            holePoints.add(new HashMap<>()
+                            holePoints.add(new HashMap<String, Integer>()
                             {{
                                 put("x", holePoint.getX());
                                 put("y", holePoint.getY());
@@ -85,7 +86,7 @@ public class Polygons
                     }
                 }
 
-                data.add(new HashMap<>()
+                data.add(new HashMap<String, Object>()
                 {{
                     put("fillColor", RGB.toHexString(polygon.getShapeProperties().getFillColor()));
                     put("fillOpacity", polygon.getShapeProperties().getFillOpacity());

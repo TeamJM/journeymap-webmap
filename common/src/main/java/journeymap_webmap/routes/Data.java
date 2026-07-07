@@ -12,6 +12,7 @@ import journeymap.client.waypoint.ClientWaypointImpl;
 import journeymap.common.Journeymap;
 import org.apache.logging.log4j.Logger;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -25,7 +26,7 @@ public class Data
             .create();
     private static final Logger logger = Journeymap.getLogger("webmap/routes/data");
 
-    private static final List<String> dataTypesRequiringSince = List.of("all", "images");
+    private static final List<String> dataTypesRequiringSince = Arrays.asList("all", "images");
 
     public static void dataGet(Context ctx)
     {

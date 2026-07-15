@@ -1,13 +1,15 @@
 package journeymap_webmap;
 
-import net.minecraftforge.fml.common.Mod;
+import cpw.mods.fml.common.Mod;
 
 /**
- * 1.12.2 Forge mod entry. Unlike 1.16.5's value-based {@code @Mod(MOD_ID)}, legacy Forge requires the
- * {@code modid} element and reads the rest of the mod metadata (name, version, dependencies) from
- * {@code mcmod.info} via {@code useMetadata}. Client-only: every route touches client-side Minecraft state.
+ * 1.7.10 Forge mod entry. FML lives under {@code cpw.mods.fml.*} on 1.7.10 (not {@code net.minecraftforge.fml}).
+ * {@code @Mod} requires {@code modid}; name/version/dependencies come from {@code mcmod.info} via
+ * {@code useMetadata}. 1.7.10's {@code @Mod} has no {@code clientSideOnly} element - the mod is effectively
+ * client-only anyway (its WebMapService only starts on the client), and {@code acceptableRemoteVersions = "*"}
+ * lets it connect to servers that do not have it installed.
  */
-@Mod(modid = Constants.MOD_ID, useMetadata = true, clientSideOnly = true)
+@Mod(modid = Constants.MOD_ID, useMetadata = true, acceptableRemoteVersions = "*")
 public class JourneymapWebmapForge
 {
 }

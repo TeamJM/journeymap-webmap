@@ -4,7 +4,7 @@
     "name": "JourneyMap WebMap",
     "description": "Client WebMap for JourneyMap: view your JourneyMap map in a web browser. Built: ${date}.",
     "version": "${modVersion}",
-    "mcversion": "1.12.2",
+    "mcversion": "1.7.10",
     "url": "http://journeymap.info",
     "authorList": ["techbrew", "mysticdrew", "gdude"],
     "logoFile": "journeymapwebmap.png",

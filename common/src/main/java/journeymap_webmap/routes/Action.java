@@ -28,7 +28,7 @@ public class Action
     public void actionGet(Context ctx)
     {
         Minecraft minecraft = Minecraft.getMinecraft();
-        World level = minecraft.world;
+        World level = minecraft.theWorld;
 
         if (level == null)
         {

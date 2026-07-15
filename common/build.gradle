@@ -9,14 +9,25 @@ repositories {
     maven fg.minecraftLibsMaven
 }
 
-// FG7 puts MCP-mapped Minecraft (readable class names + MCP snapshot member names) on the compile
-// classpath for the 1.12.2 forge dependency below. :common's source is recompiled into :forge, so
+// FG7 puts MCP-mapped Minecraft (readable class names + MCP stable_12 member names) on the compile
+// classpath for the 1.7.10 forge dependency below. :common's source is recompiled into :forge, so
 // Minecraft is needed at compile time only (compileOnly). No renamer on :common - only the shipped
-// :forge jar is reobfuscated MCP -> SRG. This replaces the 1.16.5 minivan/mojmap toolchain: the JM
-// internals jar (from cursemaven, in the multiloader-common convention) is MCP too, so it resolves
-// directly with no intermediary->mojmap remap.
+// :forge jar is reobfuscated MCP -> SRG. The JM internals jar (from cursemaven, in the multiloader-common
+// convention) is MCP too, so it resolves directly with no remap.
 minecraft {
     mappings channel: project.mappings_channel, version: project.mappings
+}
+
+// Compile-vs-runtime version pins (mirrors journeymap-1.7.10). MC 1.7.10 ships guava 17.0 / commons-lang3
+// 3.3.2 / gson 2.2.4; transitives (e.g. via kotlin/javalin metadata) can bump them, which would let newer
+// API compile here but NoSuchMethodError on the real 1.7.10 runtime. Pin to MC's versions so the compile
+// API surface matches what runs. The webmap's Data route serializes JSON with gson.
+configurations.all {
+    resolutionStrategy {
+        force 'com.google.guava:guava:17.0'
+        force 'org.apache.commons:commons-lang3:3.3.2'
+        force 'com.google.code.gson:gson:2.2.4'
+    }
 }
 
 // The test source set (if any) references net.minecraft.* - give it the same Minecraft compile classpath

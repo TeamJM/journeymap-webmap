@@ -22,7 +22,7 @@ public class Status
         Map<String, Object> data = new HashMap<>();
 
         WebmapStatus status;
-        if (Minecraft.getMinecraft().world == null)
+        if (Minecraft.getMinecraft().theWorld == null)
         {
             status = WebmapStatus.NO_WORLD;
         }

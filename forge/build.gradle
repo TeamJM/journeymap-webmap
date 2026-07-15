@@ -3,10 +3,9 @@ import net.darkhax.curseforgegradle.TaskPublishCurseForge
 plugins {
     id 'multiloader-loader'
     id 'net.minecraftforge.gradle' version '[7.0,8.0)'
-    // legacy-Forge reobf MCP -> SRG for the shipped jar (Forge 1.12.2's SRG runtime). Same mechanism the
-    // journeymap-1.12.2 mod uses; 1.12.2 is the SIMPLE reobf case (MCP and SRG share identical class/type
-    // names), so ONE renamer.classes pass suffices - NO ART, NO mojmap remap (the entire 1.16.5 ART/mojmap
-    // machinery is gone because webmap is MCP throughout on 1.12.2).
+    // legacy-Forge reobf MCP -> SRG for the shipped jar (Forge 1.7.10's SRG runtime). Same mechanism the
+    // journeymap-1.7.10 mod uses; 1.7.10 is the SIMPLE reobf case (MCP and SRG share identical class/type
+    // names, only members differ), so ONE renamer.classes pass suffices - NO ART, NO mojmap remap.
     id 'net.minecraftforge.renamer' version '1.1.0'
     id 'com.gradleup.shadow' version '8.3.10'
     id 'net.darkhax.curseforgegradle' version '1.1.28'
@@ -20,6 +19,21 @@ configurations {
     // Libraries bundled into the shipped fat jar via shadowJar. shade resolves transitively, so
     // `shade javalin` pulls the jetty stack + kotlin-stdlib; the relocations below move them out of the way.
     shade
+}
+
+// Compile-vs-runtime version pins (mirrors journeymap-1.7.10). MC 1.7.10 ships log4j 2.0-beta9, guava 17.0,
+// commons-lang3 3.3.2, gson 2.2.4; a transitive from the shaded stack can bump them, which would let newer
+// API compile here but NoSuchMethodError/NoClassDefFoundError on the real 1.7.10 runtime. Pin to MC's
+// versions so the compile API surface matches what runs. :forge recompiles :common's source (Data uses gson,
+// routes use log4j), so the pins live on this module too.
+configurations.all {
+    resolutionStrategy {
+        force 'org.apache.logging.log4j:log4j-api:2.0-beta9'
+        force 'org.apache.logging.log4j:log4j-core:2.0-beta9'
+        force 'com.google.guava:guava:17.0'
+        force 'org.apache.commons:commons-lang3:3.3.2'
+        force 'com.google.code.gson:gson:2.2.4'
+    }
 }
 
 repositories {
@@ -121,20 +135,20 @@ shadowJar {
 // =====================================================================================================
 // MCP -> SRG mapping feed for the shipped-jar reobf. FG7's mavenizer materializes the MCP<->SRG map as a
 // gzipped tsrg2 (map2srg: left = MCP human names, right = func_/field_ SRG) under the ROOT project's
-// .gradle. RenameJar wants a single plain (gunzipped) .tsrg, so gunzip it into build/. Glob the snapshot
-// dir so the build timestamp is not hardcoded (exactly one map2srg for this MC version + mappings).
+// .gradle. RenameJar wants a single plain (gunzipped) .tsrg, so gunzip it into build/. Glob the
+// mappings_${channel} dir so the build timestamp is not hardcoded (exactly one map2srg for this MC + mappings).
 // =====================================================================================================
 def map2srgTsrg = layout.buildDirectory.file('reobf-mappings/map2srg.tsrg')
 def gunzipMap2Srg = tasks.register('gunzipMap2Srg') {
     description = 'Gunzips the FG7 mavenizer MCP->SRG map2srg.tsrg.gz into build/ as a plain .tsrg for the shipped-jar reobf.'
     outputs.file map2srgTsrg
     doLast {
-        def snapshotDir = rootProject.layout.projectDirectory
-                .dir('.gradle/mavenizer/repo/net/minecraft/mappings_snapshot').asFile
-        def gz = fileTree(snapshotDir) { include '**/*-map2srg.tsrg.gz' }.files
+        def mappingsDir = rootProject.layout.projectDirectory
+                .dir(".gradle/mavenizer/repo/net/minecraft/mappings_${project.mappings_channel}").asFile
+        def gz = fileTree(mappingsDir) { include '**/*-map2srg.tsrg.gz' }.files
         if (gz.size() != 1)
         {
-            throw new GradleException("gunzipMap2Srg: expected exactly one *-map2srg.tsrg.gz under ${snapshotDir} " +
+            throw new GradleException("gunzipMap2Srg: expected exactly one *-map2srg.tsrg.gz under ${mappingsDir} " +
                     "(has the FG7 mavenizer materialized? run :forge:assemble once); found ${gz.size()}: ${gz*.name}")
         }
         def out = map2srgTsrg.get().asFile
@@ -156,7 +170,7 @@ renamer.mappings.setFrom(gunzipMap2Srg)
 
 // =====================================================================================================
 // REOBF the shipped shadowJar MCP -> SRG IN PLACE (over its own clean-named archiveFile - HARD RULE: never
-// an -srg classifier). 1.12.2 is the SIMPLE reobf case: MCP and SRG share identical class/type names
+// an -srg classifier). 1.7.10 is the SIMPLE reobf case: MCP and SRG share identical class/type names
 // (net.minecraft.*), so no descriptor carries a renamed type and ONE plain renamer.classes pass reobfs
 // correctly. Only webmap's own journeymap_webmap.* classes carry MC references; the relocated shaded libs
 // reference no MC types and pass through untouched. accessTransformers = false: webmap ships no AT.

@@ -11,7 +11,7 @@ import journeymap.client.render.map.RegionTile;
 import journeymap.common.helper.DimensionHelper;
 import journeymap_webmap.WebMap;
 import net.minecraft.client.Minecraft;
-import net.minecraft.util.math.ChunkPos;
+import net.minecraft.world.ChunkCoordIntPair;
 import net.minecraft.world.World;
 import org.eclipse.jetty.io.EofException;
 
@@ -35,7 +35,7 @@ public class Tiles
         int zoom = ctx.queryParam("zoom") != null ? Integer.parseInt(ctx.queryParam("zoom")) : 0;
 
         Minecraft minecraft = Minecraft.getMinecraft();
-        World level = minecraft.world;
+        World level = minecraft.theWorld;
 
         if (level == null)
         {
@@ -118,8 +118,8 @@ public class Tiles
         int maxChunkX = minChunkX + distance - 1;
         int maxChunkY = minChunkY + distance - 1;
 
-        ChunkPos startCoord = new ChunkPos(minChunkX, minChunkY);
-        ChunkPos endCoord = new ChunkPos(maxChunkX, maxChunkY);
+        ChunkCoordIntPair startCoord = new ChunkCoordIntPair(minChunkX, minChunkY);
+        ChunkCoordIntPair endCoord = new ChunkCoordIntPair(maxChunkX, maxChunkY);
 
         boolean showGrid = JourneymapClient.getInstance().getFullMapProperties().showGrid.get();
         MapType mapType = new MapType(mapTypeName, y, DimensionHelper.getWorldKeyForName(dimension));

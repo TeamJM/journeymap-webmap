@@ -33,7 +33,7 @@ public class Resources
         ResourceLocation resourceLocation = resource != null ? new ResourceLocation(resource) : null;
         String extension = resource != null ? resource.substring(resource.lastIndexOf('.') + 1) : null;
 
-        if (Minecraft.getMinecraft().world == null || !JourneymapClient.getInstance().isMapping() || resource == null || "undefined".equals(resource))
+        if (Minecraft.getMinecraft().theWorld == null || !JourneymapClient.getInstance().isMapping() || resource == null || "undefined".equals(resource))
         {
             ctx.result("");
             return;

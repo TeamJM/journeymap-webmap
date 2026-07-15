@@ -2,54 +2,25 @@ pluginManagement {
     repositories {
         gradlePluginPortal()
         mavenCentral()
-        maven {
-            url "https://plugins.gradle.org/m2/"
-        }
-        maven {
-            // minivan (agency.highlysuspect.minivan) - vanilla mojmap toolchain for :common on pre-1.17
-            name = 'SleepingTown'
-            url = uri('https://repo.sleeping.town/')
-        }
+        mavenLocal()
         exclusiveContent {
             forRepository {
                 maven {
-                    name = 'Fabric'
-                    url = uri('https://maven.fabricmc.net')
+                    name = 'Forge'
+                    url = uri('https://maven.minecraftforge.net')
                 }
             }
             filter {
-                includeGroup('net.fabricmc')
-                includeGroup('net.fabricmc.unpick')
-                includeGroup('fabric-loom')
+                includeGroupAndSubgroups('net.minecraftforge')
             }
-        }
-        exclusiveContent {
-            forRepository {
-                maven {
-                    name = 'Sponge Snapshots'
-                    url = uri('https://repo.spongepowered.org/repository/maven-public')
-                }
-            }
-            filter {
-                includeGroupAndSubgroups('org.spongepowered')
-                includeGroup('net.minecraftforge')
-            }
-        }
-        maven {
-            name = 'Forge'
-            url = 'https://maven.minecraftforge.net/'
-        }
-        maven {
-            url = 'https://maven.parchmentmc.org'
         }
     }
 }
 
 plugins {
-    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
 
 rootProject.name = 'journeymap_webmap'
 include("common")
-include("fabric")
 include("forge")

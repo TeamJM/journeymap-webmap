@@ -13,7 +13,7 @@ import journeymap.api.v2.client.util.UIState;
 import journeymap.client.cartography.color.RGB;
 import journeymap.client.render.draw.DrawPolygonStep;
 import journeymap.client.render.draw.OverlayDrawStep;
-import net.minecraft.core.BlockPos;
+import net.minecraft.util.math.BlockPos;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;

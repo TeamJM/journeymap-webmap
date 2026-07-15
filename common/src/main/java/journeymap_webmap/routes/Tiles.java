@@ -1,6 +1,5 @@
 package journeymap_webmap.routes;
 
-import com.mojang.blaze3d.platform.NativeImage;
 import io.javalin.http.ContentType;
 import io.javalin.http.Context;
 import journeymap.client.JourneymapClient;
@@ -12,10 +11,12 @@ import journeymap.client.render.map.RegionTile;
 import journeymap.common.helper.DimensionHelper;
 import journeymap_webmap.WebMap;
 import net.minecraft.client.Minecraft;
-import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.Level;
+import net.minecraft.util.math.ChunkPos;
+import net.minecraft.world.World;
 import org.eclipse.jetty.io.EofException;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -33,8 +34,8 @@ public class Tiles
         String mapTypeString = ctx.queryParam("mapTypeString") != null ? ctx.queryParam("mapTypeString") : MapType.Name.day.name();
         int zoom = ctx.queryParam("zoom") != null ? Integer.parseInt(ctx.queryParam("zoom")) : 0;
 
-        Minecraft minecraft = Minecraft.getInstance();
-        Level level = minecraft.level;
+        Minecraft minecraft = Minecraft.getMinecraft();
+        World level = minecraft.world;
 
         if (level == null)
         {
@@ -123,7 +124,9 @@ public class Tiles
         boolean showGrid = JourneymapClient.getInstance().getFullMapProperties().showGrid.get();
         MapType mapType = new MapType(mapTypeName, y, DimensionHelper.getWorldKeyForName(dimension));
 
-        NativeImage img = RegionImageHandler.getMergedChunks(
+        // 1.12.2 RegionImageHandler.getMergedChunks returns a java.awt BufferedImage (no NativeImage), so
+        // the PNG response is encoded with ImageIO instead of NativeImage#asByteArray.
+        BufferedImage img = RegionImageHandler.getMergedChunks(
                 worldDir, startCoord, endCoord, mapType, true, null,
                 RegionTile.TILE_SIZE, RegionTile.TILE_SIZE, false, showGrid
         );
@@ -132,7 +135,7 @@ public class Tiles
         {
             OutputStream output = ctx.res.getOutputStream();
             ctx.contentType(ContentType.IMAGE_PNG);
-            output.write(img.asByteArray());
+            ImageIO.write(img, "png", output);
             output.flush();
         }
         catch (EofException e)
@@ -145,6 +148,5 @@ public class Tiles
             WebMap.logger.info("Connection closed while writing image response. WebMap probably reloaded.");
             ctx.status(404);
         }
-        img.close();
     }
 }

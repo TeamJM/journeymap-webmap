@@ -1,19 +1,21 @@
 package journeymap_webmap.routes;
 
-import com.mojang.blaze3d.platform.NativeImage;
 import io.javalin.http.Context;
 import journeymap.client.JourneymapClient;
 import journeymap.client.io.FileHandler;
 import journeymap.client.render.draw.MobIconCache;
 import journeymap.client.texture.TextureCache;
 import journeymap.common.Journeymap;
+import journeymap_webmap.ClientThread;
 import journeymap_webmap.Constants;
 import net.minecraft.client.Minecraft;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.ResourceLocation;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.jetty.io.EofException;
 
 import javax.imageio.IIOException;
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Arrays;
@@ -26,13 +28,12 @@ public class Resources
 
     public static void resourcesGet(Context ctx)
     {
-        NativeImage img;
+        BufferedImage img;
         String resource = ctx.queryParam("resource");
         ResourceLocation resourceLocation = resource != null ? new ResourceLocation(resource) : null;
-        boolean close = false;
         String extension = resource != null ? resource.substring(resource.lastIndexOf('.') + 1) : null;
 
-        if (Minecraft.getInstance().level == null || !JourneymapClient.getInstance().isMapping() || resource == null || "undefined".equals(resource))
+        if (Minecraft.getMinecraft().world == null || !JourneymapClient.getInstance().isMapping() || resource == null || "undefined".equals(resource))
         {
             ctx.result("");
             return;
@@ -43,26 +44,26 @@ public class Resources
             extension = extension.split(":")[0];
         }
 
-        if ("fake".equals(resourceLocation != null ? resourceLocation.getNamespace() : null))
+        if ("fake".equals(resourceLocation != null ? resourceLocation.getResourceDomain() : null))
         {
-            img = TextureCache.getTexture(resourceLocation).getPixels();
+            // TextureCache.getTexture builds a 1.12.2 DynamicTexture (GL) for a "fake" resource, so resolve
+            // it to a CPU BufferedImage on the Minecraft client thread (this runs on a Jetty worker).
+            img = ClientThread.supply(() -> Constants.toImage(TextureCache.getTexture(resourceLocation)), null);
         }
         else
         {
             try
             {
-                img = MobIconCache.getWebMapIcon(resourceLocation).getPixels();
+                img = Constants.toImage(MobIconCache.getWebMapIcon(resourceLocation));
                 if (img == null)
                 {
-                    close = true;
-                    img = NativeImage.read(Constants.getResourceAsStream(resourceLocation));
+                    img = ImageIO.read(Constants.getResourceAsStream(resourceLocation));
                 }
             }
             catch (FileNotFoundException | NullPointerException e)
             {
                 logger.warn("File at resource location not found: {}", resource);
                 ctx.status(404);
-                close = true;
                 img = getDefaultImage();
             }
             catch (EofException | IIOException e)
@@ -75,7 +76,6 @@ public class Resources
             {
                 logger.error("Exception thrown while retrieving resource at location: {}", resource, e);
                 ctx.status(500);
-                close = true;
                 img = getDefaultImage();
             }
         }
@@ -85,27 +85,21 @@ public class Resources
         {
             try
             {
-                ctx.res.getOutputStream().write(img.asByteArray());
+                ImageIO.write(img, "png", ctx.res.getOutputStream());
                 ctx.res.getOutputStream().flush();
             }
             catch (Exception e)
             {
                 logger.warn("image not found {}", resource);
             }
-            if (close)
-            {
-                img.close();
-            }
         }
     }
 
-    private static NativeImage getDefaultImage()
+    private static BufferedImage getDefaultImage()
     {
         try
         {
-            NativeImage img;
-            img = NativeImage.read(Resources.class.getResource(FileHandler.ASSETS_JOURNEYMAP_UI + "/img/marker-dot-160.png").openStream());
-            return img;
+            return ImageIO.read(Resources.class.getResource(FileHandler.ASSETS_JOURNEYMAP_UI + "/img/marker-dot-160.png").openStream());
         }
         catch (IOException e)
         {

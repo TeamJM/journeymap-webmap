@@ -1,12 +1,15 @@
 package journeymap_webmap.routes;
 
 import com.mojang.authlib.GameProfile;
-import com.mojang.blaze3d.platform.NativeImage;
 import io.javalin.http.ContentType;
 import io.javalin.http.Context;
 import journeymap.client.texture.IgnSkin;
+import journeymap_webmap.ClientThread;
+import journeymap_webmap.Constants;
 import net.minecraft.client.Minecraft;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.UUID;
 
@@ -15,17 +18,17 @@ public class Skin
     public static void skinGet(Context ctx)
     {
         UUID uuid = UUID.fromString(ctx.pathParam("uuid"));
-        GameProfile profile = Minecraft.getInstance().getConnection().getPlayerInfo(uuid).getProfile();
-        boolean close = false;
-        NativeImage img;
+        GameProfile profile = Minecraft.getMinecraft().getConnection().getPlayerInfo(uuid).getGameProfile();
+        BufferedImage img;
         if (profile == null)
         {
-            img = new NativeImage(24, 24, false);
-            close = true;
+            img = new BufferedImage(24, 24, BufferedImage.TYPE_INT_ARGB);
         }
         else
         {
-            img = IgnSkin.getFace(profile).getPixels();
+            // IgnSkin.getFace can build a DynamicTexture (GL) for the default/cropped face, so resolve it
+            // to a CPU BufferedImage on the Minecraft client thread (this runs on a Jetty worker).
+            img = ClientThread.supply(() -> Constants.toImage(IgnSkin.getFace(profile)), null);
         }
 
         if (img != null)
@@ -33,12 +36,8 @@ public class Skin
             try
             {
                 ctx.contentType(ContentType.IMAGE_PNG);
-                ctx.res.getOutputStream().write(img.asByteArray());
+                ImageIO.write(img, "png", ctx.res.getOutputStream());
                 ctx.res.getOutputStream().flush();
-                if (close)
-                {
-                    img.close();
-                }
             }
             catch (IOException e)
             {

@@ -13,7 +13,7 @@ import journeymap_webmap.routes.Skin;
 import journeymap_webmap.routes.Status;
 import journeymap_webmap.routes.Tiles;
 import journeymap_webmap.routes.Waypoints;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.ResourceLocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

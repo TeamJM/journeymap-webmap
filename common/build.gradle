@@ -1,66 +1,39 @@
 plugins {
-    id 'agency.highlysuspect.minivan' version '0.5'
+    id 'net.minecraftforge.gradle' version '[7.0,8.0)'
     id 'multiloader-common'
 }
 
-// minivan puts vanilla Minecraft (official Mojang names / mojmap) on compileOnly. It replaces
-// net.neoforged.moddev.legacyforge, whose NeoForm Runtime cannot build pre-1.17 MCP. webmap ships no
-// access widener, so the accessWideners line the mod uses is omitted here.
-minivan {
-    version project.minecraft_version
+repositories {
+    maven minecraft.mavenizer
+    maven fg.forgeMaven
+    maven fg.minecraftLibsMaven
 }
 
-// The test source set (if any) references net.minecraft.* - give it the same Minecraft compile
-// classpath minivan added to main's compileOnly.
+// FG7 puts MCP-mapped Minecraft (readable class names + MCP snapshot member names) on the compile
+// classpath for the 1.12.2 forge dependency below. :common's source is recompiled into :forge, so
+// Minecraft is needed at compile time only (compileOnly). No renamer on :common - only the shipped
+// :forge jar is reobfuscated MCP -> SRG. This replaces the 1.16.5 minivan/mojmap toolchain: the JM
+// internals jar (from cursemaven, in the multiloader-common convention) is MCP too, so it resolves
+// directly with no intermediary->mojmap remap.
+minecraft {
+    mappings channel: project.mappings_channel, version: project.mappings
+}
+
+// The test source set (if any) references net.minecraft.* - give it the same Minecraft compile classpath
+// the minecraft dependency added to main's compileOnly.
 configurations {
     testCompileOnly.extendsFrom compileOnly
 }
 
-// minivan's remapped mojmap Minecraft jar carries malformed MethodParameters /
-// Runtime*ParameterAnnotations attributes (e.g. an empty MethodParameters on ChatFormatting's 6-arg
-// enum constructor) that make javac's ClassReader reject the class as a bad-class-file and abort the
-// whole compile. Strip those attributes from the merged jar in place before compiling. webmap applies
-// no access widener, so the jar is named "...-merged-...jar" (the mod's is "...-merged-widened-...jar")
-// - filter on "merged" to match either. See journeymap_webmap.buildlogic.MinivanAttrStripper.
-def stripMinivanAttrs = tasks.register('stripMinivanAttrs') {
-    description = 'Removes malformed MethodParameters/param-annotation attributes from the minivan Minecraft jar so javac can read it.'
-    doLast {
-        configurations.compileClasspath.filter { it.name.contains('merged') }.each { jar ->
-            if (journeymap_webmap.buildlogic.MinivanAttrStripper.needsStrip(jar))
-            {
-                logger.lifecycle("Stripping param-annotation attributes from ${jar.name}")
-                journeymap_webmap.buildlogic.MinivanAttrStripper.stripInPlace(jar)
-            }
-        }
-    }
-}
-
-// The JDK-8 toolchain (multiloader-common) does NOT enforce the Java-8 *API* surface in this minivan
-// setup: a forked jdk-8 javac resolves against a newer API, so List.of / Stream.toList (Java 9 / 16)
-// slip through and would NoSuchMethodError on MC 1.16.5's real Java-8 JRE. Compile :common with a
-// modern javac under --release 8 instead - ct.sym then enforces the EXACT Java-8 API at compile time.
-// stripMinivanAttrs (above) keeps --release 8's strict ClassReader able to read minivan's remapped jar.
-tasks.withType(JavaCompile).configureEach {
-    dependsOn stripMinivanAttrs
-    javaCompiler = javaToolchains.compilerFor {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
-    options.release = 8
-}
-
 dependencies {
-    // The public JourneyMap API (common variant). compileOnly - provided by the installed journeymap.
-    compileOnly group: 'info.journeymap', name: 'journeymap-api-common', version: project.journeymap_api_version, changing: true
-
-    // The JourneyMap mod internals (journeymap.client.* / journeymap.common.*) webmap serves over HTTP.
-    // The forge/MCP cursemaven jar exposes MCP Minecraft types that do not resolve on minivan's mojmap
-    // classpath, so compile against the intermediary->mojmap remap of the fabric jar (see rootProject's
-    // remapJourneymapToMojmap). compileOnly - provided by the installed journeymap at runtime.
-    compileOnly files(rootProject.journeymapMojmapJar) { builtBy rootProject.tasks.named('remapJourneymapToMojmap') }
+    compileOnly minecraft.dependency("net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}")
+    // journeymap-api-common + the JM internals cursemaven jar are supplied by the multiloader-common
+    // convention (compileOnly on every module), as are jsr305/annotations and the javalin/webmap-client/
+    // slf4j/kotlin compile deps.
 }
 
 // Expose common's SOURCE + resources to the loader modules (they compile the source directly rather than
-// depending on a common jar - see multiloader-loader). Mirrors journeymap-1.20.1.
+// depending on a common jar - see multiloader-loader). Mirrors journeymap-1.12.2.
 configurations {
     commonJava {
         canBeResolved = false

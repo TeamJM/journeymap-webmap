@@ -10,6 +10,7 @@ import journeymap.client.data.ImagesData;
 import journeymap.client.model.entity.EntityDTO;
 import journeymap.client.waypoint.ClientWaypointImpl;
 import journeymap.common.Journeymap;
+import journeymap_webmap.ClientThread;
 import org.apache.logging.log4j.Logger;
 
 import java.util.Arrays;
@@ -41,51 +42,12 @@ public class Data
             return;
         }
         long sinceTime = since == null ? 0 : Long.parseLong(since);
-        Object data = null;
-        switch (type)
-        {
-            case "all":
-                data = DataCache.INSTANCE.getAll(sinceTime);
-                break;
-            case "ambient":
-                data = DataCache.INSTANCE.getAmbientCreatures(false);
-                break;
-            case "animals":
-                data = DataCache.INSTANCE.getAnimals(false);
-                break;
-            case "mobs":
-                data = DataCache.INSTANCE.getMobs(false);
-                break;
-            case "images":
-                data = new ImagesData(Long.parseLong(since));
-                break;
-            case "player":
-                data = DataCache.INSTANCE.getPlayer(false);
-                break;
-            case "players":
-                data = DataCache.INSTANCE.getPlayers(false);
-                break;
-            case "world":
-                data = DataCache.INSTANCE.getWorld(false);
-                break;
-            case "villagers":
-                data = DataCache.INSTANCE.getVillagers(false);
-                break;
-            case "waypoints":
-                Collection<ClientWaypointImpl> holders = DataCache.INSTANCE.getWaypoints(false);
-                Map<String, Waypoint> wpMap = new HashMap<>();
-                for (ClientWaypointImpl holder : holders)
-                {
-                    wpMap.put(holder.getId(), holder);
-                }
-                data = wpMap;
-                break;
-            default:
-                logger.warn("Unknown data type '{}'", type);
-                ctx.status(400);
-                ctx.result("Unknown data type '" + type + "'");
-                return;
-        }
+
+        // A DataCache load populates EntityDTO mob icons, which build 1.12.2 DynamicTextures (GL). Resolve
+        // the data on the Minecraft client thread so that texture creation has an OpenGL context (Javalin
+        // serves this on a Jetty worker thread). The GSON serialization below reads CPU-side fields only,
+        // so it stays on the worker thread.
+        Object data = ClientThread.supply(() -> resolveData(type, sinceTime, since), null);
 
         if (data == null)
         {
@@ -97,5 +59,40 @@ public class Data
 
         ctx.contentType(ContentType.APPLICATION_JSON);
         ctx.result(GSON.toJson(data));
+    }
+
+    private static Object resolveData(String type, long sinceTime, String since)
+    {
+        switch (type)
+        {
+            case "all":
+                return DataCache.INSTANCE.getAll(sinceTime);
+            case "ambient":
+                return DataCache.INSTANCE.getAmbientCreatures(false);
+            case "animals":
+                return DataCache.INSTANCE.getAnimals(false);
+            case "mobs":
+                return DataCache.INSTANCE.getMobs(false);
+            case "images":
+                return new ImagesData(Long.parseLong(since));
+            case "player":
+                return DataCache.INSTANCE.getPlayer(false);
+            case "players":
+                return DataCache.INSTANCE.getPlayers(false);
+            case "world":
+                return DataCache.INSTANCE.getWorld(false);
+            case "villagers":
+                return DataCache.INSTANCE.getVillagers(false);
+            case "waypoints":
+                Collection<ClientWaypointImpl> holders = DataCache.INSTANCE.getWaypoints(false);
+                Map<String, Waypoint> wpMap = new HashMap<>();
+                for (ClientWaypointImpl holder : holders)
+                {
+                    wpMap.put(holder.getId(), holder);
+                }
+                return wpMap;
+            default:
+                return null;
+        }
     }
 }

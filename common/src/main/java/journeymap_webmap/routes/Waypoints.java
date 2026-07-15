@@ -1,11 +1,13 @@
 package journeymap_webmap.routes;
 
-import com.mojang.blaze3d.platform.NativeImage;
 import io.javalin.http.ContentType;
 import io.javalin.http.Context;
 import journeymap.client.texture.TextureCache;
-import net.minecraft.client.renderer.texture.DynamicTexture;
+import journeymap_webmap.ClientThread;
+import journeymap_webmap.Constants;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 
 public class Waypoints
@@ -14,23 +16,22 @@ public class Waypoints
     {
         String id = ctx.pathParam("id");
 
-        DynamicTexture img = TextureCache.getColorizedWaypointIcon(id);
+        // getColorizedWaypointIcon builds a 1.12.2 DynamicTexture (GL) on first request, so resolve the
+        // icon to a CPU BufferedImage on the Minecraft client thread; the PNG is encoded below on the
+        // Jetty worker thread.
+        BufferedImage image = ClientThread.supply(() -> Constants.toImage(TextureCache.getColorizedWaypointIcon(id)), null);
 
-        if (img != null)
+        if (image != null)
         {
-            NativeImage nativeImage = img.getPixels();
-            if (nativeImage != null)
+            try
             {
-                try
-                {
-                    ctx.contentType(ContentType.IMAGE_PNG);
-                    ctx.res.getOutputStream().write(nativeImage.asByteArray());
-                    ctx.res.getOutputStream().flush();
-                }
-                catch (IOException e)
-                {
-                    // nothing
-                }
+                ctx.contentType(ContentType.IMAGE_PNG);
+                ImageIO.write(image, "png", ctx.res.getOutputStream());
+                ctx.res.getOutputStream().flush();
+            }
+            catch (IOException e)
+            {
+                // nothing
             }
         }
     }

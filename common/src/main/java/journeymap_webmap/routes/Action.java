@@ -13,7 +13,7 @@ import journeymap.client.task.multi.SaveMapTask;
 import journeymap.common.Journeymap;
 import journeymap.common.helper.DimensionHelper;
 import net.minecraft.client.Minecraft;
-import net.minecraft.world.level.Level;
+import net.minecraft.world.World;
 import org.apache.logging.log4j.Logger;
 
 import java.io.File;
@@ -27,8 +27,8 @@ public class Action
 
     public void actionGet(Context ctx)
     {
-        Minecraft minecraft = Minecraft.getInstance();
-        Level level = minecraft.level;
+        Minecraft minecraft = Minecraft.getMinecraft();
+        World level = minecraft.world;
 
         if (level == null)
         {
@@ -64,7 +64,7 @@ public class Action
         }
     }
 
-    public void saveMap(Context ctx, Minecraft minecraft, Level level)
+    public void saveMap(Context ctx, Minecraft minecraft, World level)
     {
         File worldDir = FileHandler.getJMWorldDir(minecraft);
 
@@ -99,7 +99,7 @@ public class Action
             vSlice = null;
         }
 
-        boolean hardcore = level.getLevelData().isHardcore();
+        boolean hardcore = level.getWorldInfo().isHardcoreModeEnabled();
         MapType mapType = MapType.from(mapTypeName, vSlice, DimensionHelper.getWorldKeyForName(dimension));
 
         if (mapType.isUnderground() && hardcore)
@@ -129,7 +129,7 @@ public class Action
         ctx.result(GSON.toJson(data));
     }
 
-    public void autoMap(Context ctx, Minecraft minecraft, Level level)
+    public void autoMap(Context ctx, Minecraft minecraft, World level)
     {
         Map<String, Object> data = new HashMap<>();
         boolean enabled = JourneymapClient.getInstance().isTaskManagerEnabled(MapRegionTask.Manager.class);

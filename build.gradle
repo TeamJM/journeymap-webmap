@@ -1,14 +1,10 @@
 plugins {
-    // see https://fabricmc.net/develop/ for new versions
-    id 'fabric-loom' version '1.17-SNAPSHOT' apply false
-    // :common uses minivan (agency.highlysuspect.minivan, applied in common/build.gradle) for the
-    // pre-1.17 vanilla mojmap toolchain; :forge uses ForgeGradle 7. legacyforge (NeoForm) cannot build
-    // MC 1.16.5's MCP, so it is no longer applied anywhere.
+    // 1.12.2 webmap is FORGE-ONLY. ForgeGradle 7 (the FG7 legacy-Forge mavenizer, applied in
+    // common/build.gradle and forge/build.gradle) puts MCP-mapped Minecraft on the compile classpath;
+    // the renamer, shadow and publishing plugins are declared in the forge module that uses them. The
+    // 1.16.5 webmap's fabric-loom / minivan / tiny-remapper mojmap toolchain is gone - on 1.12.2 the JM
+    // internals jar is MCP and resolves directly against webmap's own MCP classpath (no remap).
 }
-
-// Per-module configuration lives in the buildSrc convention plugins (multiloader-common /
-// multiloader-loader) and the per-loader build.gradle files. ForgeGradle 7, the renamer, shadow and
-// the publishing plugins are declared in the forge/fabric modules that use them.
 
 configurations.configureEach {
     // Check for snapshots more frequently than Gradle's default of 1 day. 0 = every build.
@@ -18,80 +14,5 @@ configurations.configureEach {
 tasks.configureEach { task ->
     if (task instanceof Copy || task instanceof AbstractArchiveTask) {
         task.duplicatesStrategy = DuplicatesStrategy.INCLUDE
-    }
-}
-
-// The JourneyMap mod internals (journeymap.client.* / journeymap.common.*) that webmap serves over HTTP
-// are compiled against a cursemaven artifact. The forge/MCP jar (id journeymap_forge_version) exposes
-// MCP-packaged Minecraft types (net.minecraft.util.math.BlockPos, RegistryKey, ResourceLocation) in its JM
-// method signatures, which do NOT resolve on webmap's mojmap classpath (:common minivan, :fabric loom). So
-// :common and :fabric compile against a mojmap-remapped copy of the FABRIC (intermediary) cursemaven jar
-// (id journeymap_fabric_version); :forge keeps the MCP jar. This mirrors the geckolib intermediary->mojmap
-// remap in journeymap-1.16.5's fabric/build.gradle.
-// The convention plugins define repositories only on the subprojects; the root project resolves the
-// journeymapRaw (cursemaven) and tinyRemapperCli (fabric maven) configurations itself, so it needs its own.
-repositories {
-    mavenCentral()
-    maven {
-        name = 'Fabric'
-        url = uri('https://maven.fabricmc.net')
-    }
-    maven {
-        url 'https://www.cursemaven.com'
-    }
-}
-
-configurations {
-    journeymapRaw
-    // tiny-remapper publishes both a plain (external) and a fat/shadowed variant; Gradle cannot pick
-    // between them without a hint. Select the shadowed one - the self-contained CLI jar with asm bundled
-    // so JavaExec can run net.fabricmc.tinyremapper.Main directly.
-    tinyRemapperCli {
-        attributes {
-            attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling, Bundling.SHADOWED))
-        }
-    }
-}
-
-def journeymapMojmapJar = rootProject.layout.buildDirectory.file("journeymap/journeymap-mojmap.jar")
-// Publish the remapped jar path so the :common and :fabric modules can consume it as a compileOnly file.
-ext.journeymapMojmapJar = journeymapMojmapJar
-
-dependencies {
-    // The raw JourneyMap fabric (intermediary) jar plus the tiny-remapper CLI used to remap it. The
-    // remapped output is consumed as a compileOnly file in :common and :fabric.
-    journeymapRaw("curse.maven:journeymap-32274:${journeymap_fabric_version}") { transitive = false }
-    tinyRemapperCli "net.fabricmc:tiny-remapper:0.10.3"
-}
-
-// Remap the JourneyMap fabric jar intermediary -> mojmap (tiny-remapper) so :common (minivan) and :fabric
-// (loom) can compile against JM internals whose signatures reference mojmap Minecraft types. The mappings
-// come from loom's resolved 1.16.5 mappings.tiny (named namespace = mojmap). Mirrors remapGeckolibToMojmap.
-tasks.register('remapJourneymapToMojmap', JavaExec) {
-    group = 'journeymap'
-    description = 'Remap the JourneyMap fabric jar intermediary -> mojmap (tiny-remapper) for compile-only use.'
-    classpath = configurations.tinyRemapperCli
-    mainClass = 'net.fabricmc.tinyremapper.Main'
-    inputs.files(configurations.journeymapRaw)
-    // The remap target namespace tracks the MC version; declare it so a version change re-runs the remap.
-    inputs.property('minecraftVersion', project.minecraft_version)
-    outputs.file(journeymapMojmapJar)
-    doFirst {
-        def loomCache = new File(gradle.gradleUserHomeDir, "caches/fabric-loom/${project.minecraft_version}")
-        def mappingsFiles = fileTree(loomCache) { include '**/loom.mappings.*/mappings.tiny' }.files
-        if (mappingsFiles.isEmpty())
-        {
-            throw new GradleException("loom mappings.tiny not found under ${loomCache}; run a fabric build once so loom resolves mappings")
-        }
-        def mappingsTiny = mappingsFiles.toList().sort { it.lastModified() }.last()
-        def input = configurations.journeymapRaw.singleFile
-        def output = journeymapMojmapJar.get().asFile
-        output.parentFile.mkdirs()
-        if (output.exists())
-        {
-            output.delete()
-        }
-        args = [input.absolutePath, output.absolutePath, mappingsTiny.absolutePath,
-                'intermediary', 'named']
     }
 }

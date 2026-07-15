@@ -4,15 +4,20 @@ plugins {
     id 'idea'
 }
 
-// Per-loader archive name: journeymap-webmap-common / -fabric / -forge.
+// Per-loader archive name: journeymap-webmap-common / -forge.
 base {
     archivesName = "${project.base_name}-${project.name}"
 }
 version = "${project.minecraft_version}-${project.mod_version}"
 group = project.group_id
 
-java {
-    toolchain.languageVersion = JavaLanguageVersion.of(java_version)
+// LESSON FROM THE 1.16.5 PORT (and the 1.12.2 mod): a jdk-8 toolchain launcher is UNRELIABLE for
+// enforcing the Java-8 API surface - a forked jdk-8 javac still resolves symbols against whatever JRE it
+// actually runs on, so post-8 API calls (List.of / Stream.toList) slip through compilation and
+// NoSuchMethodError at runtime on MC 1.12.2's real Java-8 JRE. Compile with the Gradle daemon's own
+// (modern) javac under --release 8 instead - ct.sym then enforces the exact Java-8 API at compile time.
+tasks.withType(JavaCompile).configureEach {
+    options.release = java_version.toInteger()
 }
 
 repositories {
@@ -22,60 +27,14 @@ repositories {
         name = 'JourneyMap (Public)'
         url = 'https://jm.gserv.me/repository/maven-public/'
     }
-    exclusiveContent {
-        forRepository {
-            maven {
-                name = 'Sponge'
-                url = 'https://repo.spongepowered.org/repository/maven-public'
-            }
-        }
-        filter { includeGroupAndSubgroups('org.spongepowered') }
-    }
-    exclusiveContent {
-        forRepository {
-            maven {
-                name = 'Fabric'
-                url = uri('https://maven.fabricmc.net')
-            }
-        }
-        filter {
-            includeGroup('net.fabricmc')
-            includeGroup('net.fabricmc.unpick')
-            includeGroup('fabric-loom')
-        }
-    }
-    exclusiveContent {
-        forRepositories(
-                maven {
-                    name = 'ParchmentMC'
-                    url = 'https://maven.parchmentmc.org/'
-                },
-                maven {
-                    name = 'NeoForge'
-                    url = 'https://maven.neoforged.net/releases'
-                }
-        )
-        filter { includeGroup('org.parchmentmc.data') }
-    }
     maven {
         name = 'BlameJared'
         url = 'https://maven.blamejared.com'
     }
+    // cursemaven - the JourneyMap mod internals jar (curse.maven:journeymap-32274:<fileid>) webmap serves
+    // over HTTP is published ONLY to CurseForge (unlike the addon API, which is on BlameJared/mavenLocal).
     maven {
         url 'https://www.cursemaven.com'
-    }
-    exclusiveContent {
-        forRepository {
-            maven {
-                name = 'Modrinth'
-                url = 'https://api.modrinth.com/maven'
-            }
-        }
-        filter { includeGroup('maven.modrinth') }
-    }
-    // local mods dropped into libs/ (e.g. the journeymap 1.20.1 backport jar - see phase 3)
-    flatDir {
-        dirs "${rootDir}/libs"
     }
 }
 
@@ -83,19 +42,25 @@ dependencies {
     implementation group: 'com.google.code.findbugs', name: 'jsr305', version: '3.0.1'
     implementation group: 'org.jetbrains', name: 'annotations', version: '23.0.0'
 
-    // The JourneyMap mod internals (journeymap.client.* / journeymap.common.* that webmap serves over
-    // HTTP) are supplied PER-MODULE, not here: :common and :fabric need a mojmap-mapped JM jar (see
-    // rootProject's remapJourneymapToMojmap task) while :forge needs the MCP-mapped forge cursemaven jar.
-    // A single uniform artifact cannot satisfy both - the forge/MCP jar's JM method signatures expose
-    // MCP-packaged Minecraft types (net.minecraft.util.math.BlockPos, RegistryKey, ResourceLocation) that
-    // do not resolve on webmap's mojmap classpath (:common minivan, :fabric loom). compileOnly in every
-    // case - provided by the installed journeymap at runtime, never bundled.
+    // The JourneyMap mod internals (journeymap.client.* / journeymap.common.*) webmap serves over HTTP.
+    // On 1.12.2 (forge-only, MCP) the SAME MCP cursemaven jar satisfies BOTH modules, so it is declared
+    // here in the shared convention rather than per-module (the 1.16.5 webmap needed different mojmap vs
+    // MCP jars per loader). Its JM signatures expose MCP-named Minecraft types that resolve directly
+    // against each module's own forge MCP compile classpath (declared in common/forge build.gradle).
+    // transitive = false: the curse POM must not drag JM's own runtime deps onto the compile classpath.
+    // compileOnly - provided by the installed journeymap at runtime, never bundled. Both :common and
+    // :forge apply this convention, so both get it on their own compileClasspath (the injected common
+    // source compiled into :forge does not inherit :common's deps through the project(':common') seam).
+    compileOnly("curse.maven:journeymap-32274:${project.journeymap_forge_version}") { transitive = false }
+
+    // The public JourneyMap API (common variant). compileOnly - provided by the installed journeymap.
+    compileOnly group: 'info.journeymap', name: 'journeymap-api-common', version: project.journeymap_api_version, changing: true
 
     // Compile access to the bundled libraries on EVERY module (loaders do not inherit common's
     // implementation deps through the compileOnly project(':common') seam - each applies this convention
-    // and so gets them directly). Actual BUNDLING is added per loader: fabric loom `include`, forge
-    // `shade` + relocate. The web frontend (webmap-client) and Javalin (+kotlin-stdlib, since Javalin is
-    // Kotlin) are the payload; slf4j is pinned so Javalin/Jetty's logging resolves consistently.
+    // and so gets them directly). Actual BUNDLING is added in forge/build.gradle via `shade` + relocate.
+    // The web frontend (webmap-client) and Javalin (+kotlin-stdlib, since Javalin is Kotlin) are the
+    // payload; slf4j is pinned so Javalin/Jetty's logging resolves consistently.
     implementation group: 'info.journeymap', name: 'webmap-client', version: project.journeymap_webmap_version, changing: true
     implementation group: 'io.javalin', name: 'javalin', version: project.javalin_version
     implementation group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib', version: '2.1.20'
@@ -121,10 +86,7 @@ jar {
 tasks.register('processDocs', Copy) {
     def loader
     def loaderVersion
-    if ('fabric'.equalsIgnoreCase(project.name)) {
-        loaderVersion = fabric_api_version
-        loader = 'Fabric'
-    } else if ('forge'.equalsIgnoreCase(project.name)) {
+    if ('forge'.equalsIgnoreCase(project.name)) {
         loaderVersion = forge_version
         loader = 'Forge'
     } else {
@@ -143,15 +105,15 @@ tasks.register('processDocs', Copy) {
 }
 
 processResources {
-    // Resource placeholders used by the manifests: mods.toml (${modVersion}, ${date}) and
-    // fabric.mod.json (${version}); pack.mcmeta has none. All version placeholders resolve to the
-    // bare mod version (not the mc-prefixed gradle version).
+    // Resource placeholders used by the manifests. On 1.12.2 (forge-only) the mod manifest is mcmod.info;
+    // mods.toml is still expanded harmlessly if present. pack.mcmeta has no placeholders. All version
+    // placeholders resolve to the bare mod version (not the mc-prefixed gradle version).
     var expandProps = [
             version   : project.mod_version,
             modVersion: project.mod_version,
             date      : getDate()
     ]
-    filesMatching(['META-INF/mods.toml', 'fabric.mod.json']) {
+    filesMatching(['META-INF/mods.toml', 'mcmod.info']) {
         expand expandProps
     }
     inputs.properties(expandProps)

@@ -1,21 +1,7 @@
 plugins {
     id 'groovy-gradle-plugin'
-    id 'java'
 }
 
 repositories {
     mavenCentral()
-    maven { url = 'https://maven.minecraftforge.net' } // srgutils
-}
-
-dependencies {
-    // ASM is used by MinivanAttrStripper to remove the malformed MethodParameters /
-    // Runtime*ParameterAnnotations attributes that minivan's remap leaves on the mojmap Minecraft jar
-    // (they crash javac's ClassReader - see common/build.gradle).
-    implementation 'org.ow2.asm:asm:9.6'
-    // srgutils: compose the modern-mojmap -> srg-runtime mapping the :forge module needs to reobf its
-    // shipped jar (ForgeAutoRenamingTool map) for Forge 1.16.5's SRG runtime. Exposed on every build
-    // script's buildscript classpath via buildSrc, so forge/build.gradle can use
-    // net.minecraftforge.srgutils.IMappingFile directly without a buildscript{} block.
-    implementation 'net.minecraftforge:srgutils:0.5.10'
 }

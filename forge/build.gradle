@@ -248,6 +248,7 @@ task publishCurseForge(type: net.darkhax.curseforgegradle.TaskPublishCurseForge)
     mainFile.addJavaVersion("Java 21")
     mainFile.addGameVersion("${project.minecraft_version}", "1.21.1", "1.21.5", "1.21.8")
     mainFile.addRelation("journeymap", "requiredDependency")
+    mainFile.addEnvironment("Client")
     mainFile.changelogType = "html"
     mainFile.changelog = file("$project.buildDir/doc/changelog.html")
 }

@@ -18,6 +18,11 @@
   "license": "All Rights Reserved",
 
   "environment": "client",
+  "entrypoints": {
+    "client": [
+      "journeymap_webmap.FabricClient"
+    ]
+  },
   "mixins": [
     "journeymap_webmap.mixins.json"
   ],

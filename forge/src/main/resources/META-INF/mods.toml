@@ -32,6 +32,6 @@ side="CLIENT"
 [[dependencies.journeymap_webmap]]
 modId="journeymap"
 mandatory=true
-versionRange="[1.21.1-6.0.0-beta.45,),[1.21.4-6.0.0-beta.45,),[1.21.5-6.0.0-beta.45,)"
+versionRange="[1.21.1-6.0.0,),[1.21.4-6.0.0-beta.45,),[1.21.5-6.0.0-beta.45,)"
 side="CLIENT"
 

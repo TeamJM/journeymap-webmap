@@ -22,7 +22,7 @@
     "journeymap_webmap.mixins.json"
   ],
   "depends": {
-    "journeymap": [">=1.21.1-6.0.0-beta.45", ">=1.21.4-6.0.0-beta.45", ">=1.21.5-6.0.0-beta.45"],
+    "journeymap": [">=26.1.2-6.0.0"],
     "fabricloader": ">=0.14.11",
     "fabric-api": "*",
     "minecraft": ">=1.21",

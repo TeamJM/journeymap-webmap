@@ -35,5 +35,5 @@ side="BOTH"
 [[dependencies.journeymap_webmap]]
 modId="journeymap"
 type = "required"
-versionRange="[26.1-6.0.0-beta.45,)"
+versionRange="[26.1.2-6.0.0,)"
 side="BOTH"

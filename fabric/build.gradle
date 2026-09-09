@@ -84,6 +84,7 @@ tasks.register('publishCurseForge', net.darkhax.curseforgegradle.TaskPublishCurs
     mainFile.addJavaVersion("Java ${java_version}")
     mainFile.addGameVersion("${project.minecraft_version}")
     mainFile.addRelation('journeymap', 'requiredDependency')
+    mainFile.addEnvironment("Client")
     mainFile.changelogType = 'html'
     mainFile.changelog = file("${layout.buildDirectory.get()}/doc/changelog.html")
 }
